@@ -36,8 +36,8 @@ and after payment commited , we need to remove from effective aand make it 0 : d
 10. date format uniformating all place
 11. we need to add some space in ruppes and arthmetic operators
 12, filter selection  
-13. Report & Activity Log
 14. we need allow both side commison flow , user can give in payout branch , or they say cut from deductaion branch
+13. Report & Activity Log
 15. real time notification
 
 mumb 
@@ -66,6 +66,21 @@ Branches
 
 
 
+
+
+
+// 28-07-2026 - 
+- Daily Report
+- Fix customer reports daily basis , daily - end of the day we need to show eod balance and opening balance , daily opening balance report 
+- external Branches and our fix customer
+- export issues , reports filter issues - only pdf  
+- when we inactive any company,  then if they add system code still we did not redirect to login page 
+- head branch - can configure , export options
+
+
+
+//31-07-2026
+1.  we need to add , commison frlow , like , if someone give money ahmedbad - then on that time ,we need to count commison for collection branch also - not from payout branch
 
 
 
