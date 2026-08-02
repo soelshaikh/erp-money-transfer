@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Notes",
+    "slug": "notes-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#FDFCF5",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FDFCF5"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.notes.app"
+    },
+    "android": {
+      "package": "com.notes.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#FDFCF5",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-asset",
+      "expo-font",
+      "@react-native-community/datetimepicker"
+    ]
+  }
+}

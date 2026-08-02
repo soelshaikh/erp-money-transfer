@@ -1,0 +1,83 @@
+import { DEVICE_STATUS, NOTIFICATION_TYPE, ROLES } from '../../../config/constants';
+
+const MAX_ATTEMPTS = 5;
+const ATTEMPT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+export default class CreateDeviceSession {
+  deviceSessionRepository: any;
+  notificationService: any;
+
+  constructor(deps: any) {
+    this.deviceSessionRepository = deps.deviceSessionRepository;
+    this.notificationService = deps.notificationService || null;
+  }
+
+  async execute(params: any): Promise<{ deviceStatus: string }> {
+    const { tenantId, userId, deviceId, deviceName, platform, ip, userAgent, userName, autoApprove } = params;
+
+    const existing = await this.deviceSessionRepository.findOne(tenantId, userId, deviceId);
+
+    if (!existing) {
+      const initialStatus = autoApprove ? DEVICE_STATUS.APPROVED : DEVICE_STATUS.PENDING;
+      await this.deviceSessionRepository.create({
+        tenantId, userId, deviceId,
+        deviceName: deviceName || 'Unknown Device',
+        platform: platform || 'unknown',
+        ip, userAgent,
+        status: initialStatus,
+        attemptCount: 0,
+        approvedAt: autoApprove ? new Date() : null,
+      });
+      if (!autoApprove) this._notify(tenantId, userId, deviceName, userName);
+      return { deviceStatus: initialStatus };
+    }
+
+    // For auto-approved tenants: always keep session approved and refresh IP
+    if (autoApprove) {
+      await this.deviceSessionRepository.update(existing._id.toString(), {
+        status: DEVICE_STATUS.APPROVED,
+        ip, userAgent,
+        approvedAt: existing.approvedAt || new Date(),
+      });
+      return { deviceStatus: DEVICE_STATUS.APPROVED };
+    }
+
+    if (existing.status === DEVICE_STATUS.PENDING)   return { deviceStatus: DEVICE_STATUS.PENDING };
+    if (existing.status === DEVICE_STATUS.APPROVED)  return { deviceStatus: DEVICE_STATUS.APPROVED };
+    if (existing.status === DEVICE_STATUS.SUSPENDED) return { deviceStatus: DEVICE_STATUS.SUSPENDED };
+
+    // REJECTED — handle re-submission with rate limit
+    if (existing.status === DEVICE_STATUS.REJECTED) {
+      const now = new Date();
+      const windowStart = new Date(now.getTime() - ATTEMPT_WINDOW_MS);
+      const lastAttempt = existing.lastAttemptAt ? new Date(existing.lastAttemptAt) : null;
+      const currentCount = (lastAttempt && lastAttempt > windowStart) ? existing.attemptCount : 0;
+
+      if (currentCount >= MAX_ATTEMPTS) {
+        return { deviceStatus: 'blocked' };
+      }
+
+      await this.deviceSessionRepository.update(existing._id.toString(), {
+        status: DEVICE_STATUS.PENDING,
+        attemptCount: currentCount + 1,
+        lastAttemptAt: now,
+        ip,
+        userAgent,
+      });
+      this._notify(tenantId, userId, deviceName, userName);
+      return { deviceStatus: DEVICE_STATUS.PENDING };
+    }
+
+    return { deviceStatus: existing.status };
+  }
+
+  _notify(tenantId: any, userId: any, deviceName: string, userName: string) {
+    if (!this.notificationService) return;
+    this.notificationService.notifyRole(tenantId, ROLES.HEAD_OFFICE, {
+      type: NOTIFICATION_TYPE.DEVICE_PENDING_APPROVAL,
+      title: 'Device Approval Required',
+      body: `${userName} is requesting access from: ${deviceName || 'Unknown Device'}`,
+      data: { userId: String(userId) },
+    }).catch(() => {});
+  }
+}

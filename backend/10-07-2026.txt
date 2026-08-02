@@ -1,0 +1,71 @@
+/// 10-07-2026 
+1. Super Admin - can also add new Branch after intiliaazation also : done
+2. On run time we allow user to Override commison  : done
+3. Head office also configure branch wise commison - instead of global : done
+4. we need to give permission - override permission - to user , who can override : done
+5. we need this configuration , from super admin / for now we dont need this limit : done
+6. we dont need to show , mumbai branch unitl approve : done
+7. effective lable change to on hold  : done
+and after payment commited , we need to remove from effective aand make it 0 : done
+8. payout commited - payout approved : 
+9. we dont need to select all data in a single page
+10.  day wise collection - calender : done
+11. token number feild  : done
+12. sender & recever | mobile number : done
+13. Opening Balance - we need store this 
+
+
+// 18-07-2026 
+1. ERP 
+ - We need to 1-5 document upload (image or pdf)
+ - we need to also show , after this days this material should expire 
+ - we also need to add tags(multiple) during Material add 
+ - in laboraretery - we also need to allow document upload // they can also upload the result - SOP 
+
+
+24-07-2026
+1. ERP - when we add another device id for user , then they logged in on that device , we need to auto logout from their first device : extra 
+2. instead of DeviceId copy and paste , we need to store each login session detail and pending status , if that is not register with us then , we need to create pending login request , then Head office or super admin , can approve then after , the user can login in second device , and first device is suspended , until admin or head office not make any changes
+3. EmployyedId(like order number) (companyName+branch+username): Login Session Activity  
+4. on disable the user we need to first show current transaction (both the side) , we need to remove soft delete , instead we go with disable
+5. suspend vs disable we need to manage both the things (suspend : permenentatly) , disable & enable(temporary block
+6. on the application download , we also need to track , in which device or network application downloaded
+7. Bank transfer to IMPS(label change)
+8. mukbam to mukam(label change)
+9. gujrati and english both language support
+10. date format uniformating all place
+11. we need to add some space in ruppes and arthmetic operators
+12, filter selection  
+13. Report & Activity Log
+14. we need allow both side commison flow , user can give in payout branch , or they say cut from deductaion branch
+15. real time notification
+
+mumb 
+51000  0
+
+ahm  on hold
+74600 54000
+
+
+
+---
+1. ERP - when we add another device id for user , then they logged in on that device , we need to auto logout from their first device : extra  
+
+1. when we add another devide id for user , then they must logged out from other device
+
+
+14. we need allow both side commison flow , user can give in payout branch , or they say cut from deductaion branch : currently we have only one type comission flow , like in which branch collecting payment , we adding this commisoon to that branch , but currently it is we create in a wrong way 
+
+Branches 
+1. ahm
+2. mum
+3. JPR
+
+1. ramesh come in ahm branch and give 100000 cash and tell them , cut commisssion from this , and i need to send this to mumbai : so in thiss case mumbai brnach get this comission and we need to plus on mumbai brnach on in ahm brnach 
+2. now suppose jay come with 10000 and tell i need to sned in jPR , and i am giving commison here , and give full money to reciver in this case , we need to plus in AHM branch , : createa a proper plan , how we implement , and this is making sense ??
+
+
+
+
+
+
