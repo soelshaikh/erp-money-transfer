@@ -44,7 +44,7 @@ export default class RefreshToken {
         branchId: user.branchId ? user.branchId.toString() : null,
       },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN, algorithm: 'HS256' }
+      { expiresIn: env.JWT_EXPIRES_IN as any, algorithm: 'HS256' }
     );
 
     return { accessToken };

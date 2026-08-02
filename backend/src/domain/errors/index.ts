@@ -1,5 +1,7 @@
 export class DomainError extends Error {
   code: string;
+  statusCode?: number;
+  field?: string | null;
 
   constructor(message: string, code?: string) {
     super(message);

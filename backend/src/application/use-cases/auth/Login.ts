@@ -96,14 +96,14 @@ export default class Login {
     };
 
     const accessToken = jwt.sign(tokenPayload, env.JWT_SECRET, {
-      expiresIn: env.JWT_EXPIRES_IN,
+      expiresIn: env.JWT_EXPIRES_IN as any,
       algorithm: 'HS256',
     });
 
     const refreshToken = jwt.sign(
       { sub: user._id.toString(), tenantId: tenant._id.toString() },
       env.JWT_REFRESH_SECRET,
-      { expiresIn: env.JWT_REFRESH_EXPIRES_IN, algorithm: 'HS256' }
+      { expiresIn: env.JWT_REFRESH_EXPIRES_IN as any, algorithm: 'HS256' }
     );
 
     // Fire-and-forget — don't block login on audit/lastLogin writes

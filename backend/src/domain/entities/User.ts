@@ -67,7 +67,7 @@ export class User {
 
   deactivate(): this {
     if (!this.isActive()) throw new BusinessRuleError('User is already inactive');
-    this.status = USER_STATUS.INACTIVE;
+    this.status = USER_STATUS.DISABLED;
     return this;
   }
 
