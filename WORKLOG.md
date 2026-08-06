@@ -2,6 +2,75 @@
 
 ---
 
+## 2026-08-06 — Session 39
+
+### Feature: Credit Commission to Sending Branch — Complete
+
+**Feature overview:** When the `creditCommissionToSendingBranch` tenant flag is ON and a receiver-pays transaction (`payout` or `payout_extra`) is completed, the commission no longer goes to the payout branch immediately. Instead:
+- Payout branch: shows `commissionPayable` (liability — money they owe the sending branch)
+- Collection/sending branch: shows `commissionReceivable` (asset — money owed to them)
+- Head office or branch can initiate a bulk settlement to formally transfer the amount
+- Settlement locks payables (`reserveForSettlement`), then `completeSettlement` updates both branch balances and clears the payable/receivable
+
+**All work done across 2 sessions (Sessions 38–39).**
+
+---
+
+### Backend (Session 38 — complete)
+
+**New models:**
+- `CommissionPayable.model.ts` — per-transaction debt record (tenantId, fromBranchId, toBranchId, transactionId, amount, status, settlementId)
+- `CommissionSettlement.model.ts` — bulk settlement record (fromBranch, toBranch, totalAmount, transactionCount, payableIds, audit trail)
+
+**New repositories:**
+- `MongoCommissionPayableRepository.ts` — `getPendingSummary()` groups by branch pair; `reserveForSettlement()` locks payables; `findPending()` filters unreserved only
+- `MongoCommissionSettlementRepository.ts` — `complete()` uses status guard against double-complete
+
+**New use-cases:**
+- `GetCommissionPayables.ts` — supports `summaryOnly: true` for grouped pending view
+- `GetCommissionSettlements.ts` — list with filters
+- `CreateCommissionSettlement.ts` — validates branches, gets all unreserved pending payables, creates settlement, reserves payables
+- `CompleteCommissionSettlement.ts` — marks settled, writes `commission_settlement_out` (payout branch) + `commission_settlement_in` (collection branch) ledger entries, updates both balances
+
+**New routes:** `GET /api/v1/commission-settlements/payables`, `GET /`, `GET /:id`, `POST /`, `PATCH /:id/complete`
+
+**New tenant route:** `PATCH /api/v1/tenants/:id/credit-commission-flag`
+
+**Modified:**
+- `CompletePayment.ts` — flag ON: writes `commission_payable` + `commission_receivable` ledger entries + creates CommissionPayable record; flag OFF: unchanged `commission_earned` flow
+- `Branch.model.ts` — added `commissionPayable`, `commissionReceivable` fields
+- `BranchLedger.model.ts` — 4 new event types
+- `MongoBranchLedgerRepository.ts` — new events in `buildIncrement()`; effective balance formula extended: `balance − committed − pending + payoutCompleted − commPayable + commReceivable`
+- `GetBranchLedger.ts`, `GetDashboard.ts`, `BranchController.balanceSummary()` — return new fields
+- `Tenant.model.ts` — `featuresSchema.creditCommissionToSendingBranch`
+- `container.ts`, `app.ts` — wired up all new components
+
+---
+
+### Mobile (Session 39 — complete)
+
+**New screens:**
+- `CommissionPayablesScreen.tsx` — grouped summary of pending payables by branch pair; "Initiate Settlement" button creates settlement and navigates to detail; header right navigates to CommissionSettlementsScreen
+- `CommissionSettlementsScreen.tsx` — list with status filter chips (All/Pending/Completed); tap → CommissionSettlementDetailScreen
+- `CommissionSettlementDetailScreen.tsx` — shows settlement detail, branch flow, audit trail (initiated/completed by); "Mark Transferred" button for pending settlements
+
+**New API:** `commissionSettlementApi.ts` (listPayables, listSettlements, getSettlement, createSettlement, completeSettlement)
+
+**Navigation:**
+- MainNavigator: 3 new screens registered in DashboardStack (both branch + head_office) and BranchStack (head_office)
+- BranchLedgerScreen header: `swap-horizontal-outline` button → CommissionPayablesScreen
+- CommissionPayablesScreen header: `time-outline` button → CommissionSettlementsScreen
+- DashboardScreen: `Comm. Payable` and `Comm. Receivable` pills made tappable → CommissionPayablesScreen
+
+**Modified screens:**
+- `DashboardScreen.tsx` — commPayable/commReceivable pills shown when > 0, tappable
+- `BranchLedgerScreen.tsx` — 4 new EVENT_META entries; commissionPayable/commissionReceivable indicator rows in summary card; settlements nav button in header
+- `TenantDetailScreen.tsx` — "COMMISSION ROUTING" card with toggle for `creditCommissionToSendingBranch` flag (super admin only)
+
+**i18n:** Added `nav.commissionPayables` and `nav.commissionSettlements` in en.ts and gu.ts
+
+---
+
 ## 2026-07-31 — Session 37
 
 ### Bug Fix: Comprehensive IST timezone + commission side audit

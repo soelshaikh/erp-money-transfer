@@ -25,6 +25,8 @@ const en = {
     loginActivity: 'Login Activity',
     auditLog: 'Audit Log',
     transactionDetails: 'Transaction Details',
+    commissionPayables: 'Commission Payables',
+    commissionSettlements: 'Commission Settlements',
   },
 
   common: {

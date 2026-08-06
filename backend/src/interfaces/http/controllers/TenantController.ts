@@ -40,6 +40,7 @@ export default class TenantController {
     this.addUserDevice = this.addUserDevice.bind(this);
     this.removeUserDevice = this.removeUserDevice.bind(this);
     this.updateExportFormats = this.updateExportFormats.bind(this);
+    this.updateCreditCommissionFlag = this.updateCreditCommissionFlag.bind(this);
   }
 
   async create(req: any, res: any) {
@@ -149,6 +150,14 @@ export default class TenantController {
   async removeUserDevice(req: any, res: any) {
     await this.userRepository.removeDevice(req.params.tenantId, req.params.userId, req.params.deviceId);
     res.json({ success: true, data: { message: 'Device removed' } });
+  }
+
+  async updateCreditCommissionFlag(req: any, res: any) {
+    const tenantDoc = await this.tenantRepository.findById(req.params.id);
+    if (!tenantDoc) throw new NotFoundError('Tenant');
+    const { enabled } = req.body;
+    await this.tenantRepository.update(req.params.id, { 'features.creditCommissionToSendingBranch': Boolean(enabled) });
+    res.json({ success: true, data: { creditCommissionToSendingBranch: Boolean(enabled) } });
   }
 
   async updateExportFormats(req: any, res: any) {

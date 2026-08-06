@@ -26,7 +26,9 @@ export default class GetBranchLedger {
     const committedPayout = branch.committedPayout ?? 0;
     const pendingPayout = branch.pendingPayout ?? 0;
     const payoutCompleted = branch.payoutCompleted ?? 0;
-    const effectiveBalance = actualBalance - committedPayout - pendingPayout + payoutCompleted;
+    const commissionPayable = branch.commissionPayable ?? 0;
+    const commissionReceivable = branch.commissionReceivable ?? 0;
+    const effectiveBalance = actualBalance - committedPayout - pendingPayout + payoutCompleted - commissionPayable + commissionReceivable;
 
     return {
       branch: {
@@ -38,6 +40,8 @@ export default class GetBranchLedger {
         committedPayout,
         pendingPayout,
         payoutCompleted,
+        commissionPayable,
+        commissionReceivable,
         effectiveBalance,
         openingBalance,
       },

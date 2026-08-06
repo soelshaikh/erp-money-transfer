@@ -7,6 +7,8 @@ export default class CompletePayment {
   auditService: any;
   branchLedgerRepository: any;
   branchRepository: any;
+  tenantRepository: any;
+  commissionPayableRepository: any;
 
   constructor(deps: any) {
     this.transactionRepository = deps.transactionRepository;
@@ -14,6 +16,8 @@ export default class CompletePayment {
     this.auditService = deps.auditService;
     this.branchLedgerRepository = deps.branchLedgerRepository;
     this.branchRepository = deps.branchRepository;
+    this.tenantRepository = deps.tenantRepository;
+    this.commissionPayableRepository = deps.commissionPayableRepository;
   }
 
   async execute(params: any): Promise<any> {
@@ -34,7 +38,7 @@ export default class CompletePayment {
     });
     if (!completed) throw new BusinessRuleError('Transaction already completed');
 
-    // Payout debit — always finalAmount (correct for both commission sides)
+    // Payout debit — always finalAmount (correct for all commission sides)
     await this.branchLedgerRepository.addEntry(tenantId, completed.payoutBranchId.toString(), {
       transactionId: completed._id,
       type: 'debit',
@@ -44,16 +48,68 @@ export default class CompletePayment {
       tokenNumber: completed.tokenNumber,
     });
 
-    // Payout side: payout branch earns the commission — credit it now that payment is done
-    if (completed.commissionSide === COMMISSION_SIDE.PAYOUT && completed.commissionAmount > 0) {
-      await this.branchLedgerRepository.addEntry(tenantId, completed.payoutBranchId.toString(), {
-        transactionId: completed._id,
-        type: 'credit',
-        amount: completed.commissionAmount,
-        description: `Commission earned ₹${completed.commissionAmount} — Token ${completed.tokenNumber}`,
-        event: 'commission_earned',
-        tokenNumber: completed.tokenNumber,
-      });
+    // Fetch branches once — needed for commission descriptions, CommissionPayable record, and audit
+    const [collectionBranch, payoutBranch] = await Promise.all([
+      this.branchRepository.findById(tenantId, completed.collectionBranchId.toString()),
+      this.branchRepository.findById(tenantId, completed.payoutBranchId.toString()),
+    ]);
+
+    // Commission handling — only applies when payout/payout_extra side and commission > 0
+    const isPayoutSide = (completed.commissionSide === COMMISSION_SIDE.PAYOUT || completed.commissionSide === 'payout_extra');
+    if (isPayoutSide && completed.commissionAmount > 0) {
+      const tenant = await this.tenantRepository.findById(tenantId);
+      const creditToSender = tenant?.features?.creditCommissionToSendingBranch === true;
+
+      if (creditToSender) {
+        // Flag ON: payout branch owes commission to collection (sending) branch
+        const collName = collectionBranch ? `${collectionBranch.name} (${collectionBranch.code})` : 'collection branch';
+        const payName = payoutBranch ? `${payoutBranch.name} (${payoutBranch.code})` : 'payout branch';
+
+        // Payout branch: commissionPayable increases — effective balance drops
+        await this.branchLedgerRepository.addEntry(tenantId, completed.payoutBranchId.toString(), {
+          transactionId: completed._id,
+          type: 'debit',
+          amount: completed.commissionAmount,
+          description: `Commission payable to ${collName} — Token ${completed.tokenNumber}`,
+          event: 'commission_payable',
+          tokenNumber: completed.tokenNumber,
+        });
+
+        // Collection branch: commissionReceivable increases — effective balance rises
+        await this.branchLedgerRepository.addEntry(tenantId, completed.collectionBranchId.toString(), {
+          transactionId: completed._id,
+          type: 'credit',
+          amount: completed.commissionAmount,
+          description: `Commission receivable from ${payName} — Token ${completed.tokenNumber}`,
+          event: 'commission_receivable',
+          tokenNumber: completed.tokenNumber,
+        });
+
+        // CommissionPayable record for settlement tracking
+        await this.commissionPayableRepository.create({
+          tenantId,
+          fromBranchId: completed.payoutBranchId,
+          fromBranchName: payoutBranch?.name || '',
+          fromBranchCode: payoutBranch?.code || '',
+          toBranchId: completed.collectionBranchId,
+          toBranchName: collectionBranch?.name || '',
+          toBranchCode: collectionBranch?.code || '',
+          transactionId: completed._id,
+          tokenNumber: completed.tokenNumber,
+          amount: completed.commissionAmount,
+          status: 'pending',
+        });
+      } else {
+        // Flag OFF (default): payout branch earns commission immediately
+        await this.branchLedgerRepository.addEntry(tenantId, completed.payoutBranchId.toString(), {
+          transactionId: completed._id,
+          type: 'credit',
+          amount: completed.commissionAmount,
+          description: `Commission earned ₹${completed.commissionAmount} — Token ${completed.tokenNumber}`,
+          event: 'commission_earned',
+          tokenNumber: completed.tokenNumber,
+        });
+      }
     }
 
     this.notificationService.notifyBranch(tenantId, completed.collectionBranchId.toString(), {
@@ -69,11 +125,6 @@ export default class CompletePayment {
       body: `Token ${completed.tokenNumber} has been completed. Amount: ₹${completed.amount}`,
       data: { transactionId: completed._id, tokenNumber: completed.tokenNumber, amount: completed.amount },
     }).catch(() => {});
-
-    const [collectionBranch, payoutBranch] = await Promise.all([
-      this.branchRepository.findById(tenantId, completed.collectionBranchId.toString()),
-      this.branchRepository.findById(tenantId, completed.payoutBranchId.toString()),
-    ]);
 
     this.auditService.log({
       tenantId,

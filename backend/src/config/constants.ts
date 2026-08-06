@@ -46,6 +46,13 @@ export const NOTIFICATION_TYPE = Object.freeze({
   PAYMENT_COMPLETED: 'payment_completed',
   DEVICE_REGISTERED: 'device_registered',
   DEVICE_PENDING_APPROVAL: 'device_pending_approval',
+  APP_ACCESS_REQUESTED: 'app_access_requested',
+} as const);
+
+export const APP_ACCESS_STATUS = Object.freeze({
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
 } as const);
 
 export const AUDIT_ACTIONS = Object.freeze({
@@ -61,6 +68,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   PASSWORD_RESET: 'PASSWORD_RESET',
   PAYMENT_COMPLETE: 'PAYMENT_COMPLETE',
   COMMISSION_OVERRIDE: 'COMMISSION_OVERRIDE',
+  COMMISSION_SETTLEMENT: 'COMMISSION_SETTLEMENT',
   DEVICE_APPROVE: 'DEVICE_APPROVE',
   DEVICE_REJECT: 'DEVICE_REJECT',
   DEVICE_SUSPEND: 'DEVICE_SUSPEND',
@@ -76,6 +84,7 @@ export const MODULES = Object.freeze({
   SETTINGS: 'Settings',
   TENANT: 'Tenant',
   DEVICE: 'Device',
+  COMMISSION_SETTLEMENT: 'CommissionSettlement',
 } as const);
 
 export const ID_PROOF_TYPES = Object.freeze(['aadhar', 'pan', 'passport', 'voter_id', 'driving_license', 'other']);

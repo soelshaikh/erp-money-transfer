@@ -7,22 +7,57 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../../../store/configStore';
 import { apiClient } from '../../../api/client';
+import { getOrCreateDeviceId, getDeviceName } from '../../../utils/deviceId';
 
-// Notepad line height — fixed, no theme dependency (this screen has no tenant branding)
-const LINE_HEIGHT = 36;
-const LINE_COLOR = '#C8D6E0';
-const PAPER_COLOR = '#FDFCF5';
-const INK_COLOR = '#2C3E50';
-const MARGIN_COLOR = '#E8A0A0';
+const LINE_HEIGHT   = 36;
+const LINE_COLOR    = '#C8D6E0';
+const PAPER_COLOR   = '#FDFCF5';
+const INK_COLOR     = '#2C3E50';
+const MARGIN_COLOR  = '#E8A0A0';
 
 export function NotesScreen() {
   const { t } = useTranslation();
-  const { branchCode, save } = useConfigStore();
-  const [text, setText] = useState<string>(branchCode || '');
+  const { branchCode, save, deviceApprovalStatus, setDeviceStatus } = useConfigStore();
+
+  // Mode: 'gate' = secret code entry, 'slug' = company slug entry (existing behaviour)
+  const mode = deviceApprovalStatus === 'approved' ? 'slug' : 'gate';
+
+  const [text, setText] = useState<string>(mode === 'slug' ? (branchCode || '') : '');
   const [saved, setSaved] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
 
-  const handleSave = async () => {
+  // ── Gate mode: validate secret code against backend ──────────────────────
+  const handleGateSave = async () => {
+    if (loading) return;
+    const trimmed = text.trim();
+    if (!trimmed) { setSaved(true); return; }
+
+    setLoading(true);
+    try {
+      const deviceId   = await getOrCreateDeviceId();
+      const deviceName = getDeviceName();
+      const res = await apiClient.post('/app-install/request-access', {
+        secretCode: trimmed,
+        deviceId,
+        deviceName,
+        platform: Platform.OS,
+      });
+      const status: string = res.data?.data?.status;
+
+      if (status === 'approved') {
+        await setDeviceStatus('approved');
+        // configStore update triggers AppNavigator to re-render into slug mode
+      }
+      // pending / invalid / rejected — look identical to the user: just "Done ✓"
+    } catch {
+      // network error — silently act like a note save
+    }
+    setSaved(true);
+    setLoading(false);
+  };
+
+  // ── Slug mode: existing behaviour (validate company, save slug) ──────────
+  const handleSlugSave = async () => {
     if (loading) return;
     const trimmed = text.trim();
     if (!trimmed) {
@@ -33,50 +68,50 @@ export function NotesScreen() {
     try {
       const res = await apiClient.get('/auth/validate-company', { params: { slug: trimmed } });
       const data = res.data?.data;
-      // Company not found or not active — fake "saved" but don't navigate
       if (!data?.valid || data?.status !== 'active') {
         setSaved(true);
         setLoading(false);
         return;
       }
     } catch {
-      // Network unreachable — proceed to login anyway; login will handle it
+      // Network unreachable — proceed anyway
     }
     setLoading(false);
     await save(trimmed);
     setSaved(true);
   };
 
+  const handleSave = mode === 'gate' ? handleGateSave : handleSlugSave;
+
+  const saveBtnLabel = loading
+    ? '...'
+    : saved
+      ? `${t('common.success')} ✓`
+      : t('common.done');
+
   return (
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar barStyle="dark-content" backgroundColor={PAPER_COLOR} />
+      <StatusBar barStyle="dark-content" backgroundColor="#E8E0D0" />
 
-      {/* Top bar — looks like a notes app header */}
       <View style={styles.header}>
         <Text style={styles.headerDate}>
           {new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric' })}
         </Text>
         <TouchableOpacity onPress={handleSave} style={styles.saveBtn} activeOpacity={0.7}>
-          <Text style={styles.saveBtnText}>{saved ? `${t('common.success')} ✓` : t('common.done')}</Text>
+          <Text style={styles.saveBtnText}>{saveBtnLabel}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Notepad paper */}
       <View style={styles.paper}>
-        {/* Red margin line */}
         <View style={styles.margin} />
-
-        {/* Lined background — decorative lines behind the input */}
         <View style={styles.linesContainer} pointerEvents="none">
           {Array.from({ length: 20 }).map((_, i) => (
             <View key={i} style={[styles.line, { top: LINE_HEIGHT * (i + 1) }]} />
           ))}
         </View>
-
-        {/* Actual text input */}
         <TextInput
           value={text}
           onChangeText={(v: string) => { setText(v); setSaved(false); }}
@@ -89,6 +124,7 @@ export function NotesScreen() {
           style={styles.input}
         />
       </View>
+
     </KeyboardAvoidingView>
   );
 }

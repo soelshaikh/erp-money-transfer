@@ -9,16 +9,24 @@ import { todayIST } from '../../../utils/dateIST';
 /**
  * Determines which branch fields to increment based on the ledger event.
  *
- * collection              → balance +amount            (cash received)
- * collection_reversed     → balance -amount            (reversal on rejection)
- * pending_payout          → pendingPayout +amount      (legacy — no longer written)
- * pending_payout_reversed → pendingPayout -amount      (legacy — no longer written)
- * payout_committed        → committedPayout +amount    (approved, not yet paid)
- * payout_completed        → balance -amount            (actual cash out)
- *                           committedPayout -amount    (clear the commitment)
- *                           payoutCompleted +amount    (offset so effective returns to 0)
+ * collection                → balance +amount              (cash received)
+ * collection_reversed       → balance -amount              (reversal on rejection)
+ * pending_payout            → pendingPayout +amount        (legacy — no longer written)
+ * pending_payout_reversed   → pendingPayout -amount        (legacy — no longer written)
+ * payout_committed          → committedPayout +amount      (approved, not yet paid)
+ * payout_completed          → balance -amount              (actual cash out)
+ *                             committedPayout -amount      (clear the commitment)
+ *                             payoutCompleted +amount      (offset so effective returns to 0)
+ * commission_earned         → balance +amount              (flag OFF: payout branch keeps commission)
+ * commission_payable        → commissionPayable +amount    (flag ON: payout branch owes to collection branch)
+ * commission_receivable     → commissionReceivable +amount (flag ON: collection branch is owed from payout branch)
+ * commission_settlement_out → balance -amount              (payout branch transfers cash to collection branch)
+ *                             commissionPayable -amount    (liability cleared)
+ * commission_settlement_in  → balance +amount              (collection branch receives cash)
+ *                             commissionReceivable -amount (receivable cleared)
  *
- * Effective balance formula: balance − committedPayout − pendingPayout + payoutCompleted
+ * Effective balance formula:
+ *   balance − committedPayout − pendingPayout + payoutCompleted − commissionPayable + commissionReceivable
  */
 function buildIncrement(event: string, amount: number): Record<string, number> {
   switch (event) {
@@ -36,6 +44,14 @@ function buildIncrement(event: string, amount: number): Record<string, number> {
       return { balance: -amount, committedPayout: -amount, payoutCompleted: amount };
     case 'commission_earned':
       return { balance: amount };
+    case 'commission_payable':
+      return { commissionPayable: amount };
+    case 'commission_receivable':
+      return { commissionReceivable: amount };
+    case 'commission_settlement_out':
+      return { balance: -amount, commissionPayable: -amount };
+    case 'commission_settlement_in':
+      return { balance: amount, commissionReceivable: -amount };
     default:
       return {};
   }
@@ -60,11 +76,15 @@ export default class MongoBranchLedgerRepository extends IBranchLedgerRepository
     const prevCommitted = (oldBranch as any).committedPayout ?? 0;
     const prevPending = (oldBranch as any).pendingPayout ?? 0;
     const prevPayoutCompleted = (oldBranch as any).payoutCompleted ?? 0;
+    const prevCommPayable = (oldBranch as any).commissionPayable ?? 0;
+    const prevCommReceivable = (oldBranch as any).commissionReceivable ?? 0;
 
     const newBalance = prevBalance + (inc.balance ?? 0);
     const newCommitted = prevCommitted + (inc.committedPayout ?? 0);
     const newPending = prevPending + (inc.pendingPayout ?? 0);
     const newPayoutCompleted = prevPayoutCompleted + (inc.payoutCompleted ?? 0);
+    const newCommPayable = prevCommPayable + (inc.commissionPayable ?? 0);
+    const newCommReceivable = prevCommReceivable + (inc.commissionReceivable ?? 0);
 
     const entry = await BranchLedgerModel.create({
       tenantId,
@@ -74,8 +94,8 @@ export default class MongoBranchLedgerRepository extends IBranchLedgerRepository
       amount,
       actualBalanceBefore: prevBalance,
       actualBalanceAfter: newBalance,
-      effectiveBalanceBefore: prevBalance - prevCommitted - prevPending + prevPayoutCompleted,
-      effectiveBalanceAfter: newBalance - newCommitted - newPending + newPayoutCompleted,
+      effectiveBalanceBefore: prevBalance - prevCommitted - prevPending + prevPayoutCompleted - prevCommPayable + prevCommReceivable,
+      effectiveBalanceAfter: newBalance - newCommitted - newPending + newPayoutCompleted - newCommPayable + newCommReceivable,
       description,
       event,
       tokenNumber,

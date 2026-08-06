@@ -12,10 +12,12 @@ const branchSchema = new mongoose.Schema({
   state: { type: String, trim: true },
   pincode: { type: String, trim: true },
   status: { type: String, enum: Object.values(BRANCH_STATUS), default: BRANCH_STATUS.ACTIVE },
-  balance: { type: Number, default: 0 },           // actual cash in/out
-  committedPayout: { type: Number, default: 0 },  // approved but not yet paid out
-  pendingPayout: { type: Number, default: 0 },    // created but not yet approved
-  payoutCompleted: { type: Number, default: 0 },  // total paid out (offsets balance in effective calc)
+  balance: { type: Number, default: 0 },             // actual cash in/out
+  committedPayout: { type: Number, default: 0 },    // approved but not yet paid out
+  pendingPayout: { type: Number, default: 0 },      // created but not yet approved
+  payoutCompleted: { type: Number, default: 0 },    // total paid out (offsets balance in effective calc)
+  commissionPayable: { type: Number, default: 0 },  // commission collected on behalf of sending branch (flag ON, payout side)
+  commissionReceivable: { type: Number, default: 0 }, // commission earned from payout branch not yet received (flag ON, collection side)
   commissionConfig: {
     enabled: { type: Boolean, default: false },
     type: { type: String, enum: ['flat', 'percentage'], default: 'flat' },

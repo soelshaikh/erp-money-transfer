@@ -23,6 +23,8 @@ const env = {
   SUPER_ADMIN_USERNAME: optional('SUPER_ADMIN_USERNAME', 'superadmin'),
   SUPER_ADMIN_PASSWORD: required('SUPER_ADMIN_PASSWORD'),
 
+  APP_ACCESS_CODE: optional('APP_ACCESS_CODE', ''),
+
   CLIENT_URL: optional('CLIENT_URL', '*'),
   LOG_LEVEL: optional('LOG_LEVEL', 'info'),
 

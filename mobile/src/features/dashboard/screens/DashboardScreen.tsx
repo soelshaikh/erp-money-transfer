@@ -302,6 +302,8 @@ export function DashboardScreen() {
           const pending = Number((data as any).pendingPayout || 0);
           const onHold = committed + pending;
           const holdColor = onHold > 0 ? theme.colors.statusPending : theme.colors.textSecondary;
+          const commPayable = Number((data as any).commissionPayable || 0);
+          const commReceivable = Number((data as any).commissionReceivable || 0);
           return (
             <AppCard style={{ marginBottom: theme.spacing.lg }}>
               <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm, fontWeight: '600' }]}>
@@ -322,6 +324,34 @@ export function DashboardScreen() {
                   </Text>
                 </View>
               </View>
+              {(commPayable > 0 || commReceivable > 0) && (
+                <View style={{ marginTop: theme.spacing.sm, paddingTop: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.divider, flexDirection: 'row', gap: theme.spacing.sm }}>
+                  {commPayable > 0 && (
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      style={{ flex: 1, backgroundColor: withAlpha(theme.colors.warning, 0.08), borderRadius: theme.borderRadius.sm, padding: theme.spacing.sm, alignItems: 'center' }}
+                      onPress={() => navigation.navigate('CommissionPayables')}
+                    >
+                      <Text style={[theme.typography.caption, { color: theme.colors.warning, fontWeight: '600' }]}>Comm. Payable</Text>
+                      <Text style={[theme.typography.label, { color: theme.colors.warning, fontWeight: '700' }]} allowFontScaling={false}>
+                        {fmtAmt(commPayable)}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {commReceivable > 0 && (
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      style={{ flex: 1, backgroundColor: withAlpha(theme.colors.success, 0.08), borderRadius: theme.borderRadius.sm, padding: theme.spacing.sm, alignItems: 'center' }}
+                      onPress={() => navigation.navigate('CommissionPayables')}
+                    >
+                      <Text style={[theme.typography.caption, { color: theme.colors.success, fontWeight: '600' }]}>Comm. Receivable</Text>
+                      <Text style={[theme.typography.label, { color: theme.colors.success, fontWeight: '700' }]} allowFontScaling={false}>
+                        {fmtAmt(commReceivable)}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </AppCard>
           );
         })()}

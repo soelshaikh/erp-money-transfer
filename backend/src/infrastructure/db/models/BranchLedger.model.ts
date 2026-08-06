@@ -15,7 +15,12 @@ const branchLedgerSchema = new mongoose.Schema({
   description: { type: String, required: true },
   event: {
     type: String,
-    enum: ['collection', 'payout_committed', 'payout_completed', 'collection_reversed', 'pending_payout', 'pending_payout_reversed', 'commission_earned'],
+    enum: [
+      'collection', 'payout_committed', 'payout_completed', 'collection_reversed',
+      'pending_payout', 'pending_payout_reversed', 'commission_earned',
+      'commission_payable', 'commission_receivable',
+      'commission_settlement_out', 'commission_settlement_in',
+    ],
     required: true,
   },
   tokenNumber: { type: String, required: true },

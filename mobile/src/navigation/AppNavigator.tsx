@@ -10,10 +10,7 @@ import { PendingDeviceScreen } from '../features/auth/screens/PendingDeviceScree
 import { LoadingScreen } from '../shared/components/LoadingScreen';
 import { useSocket } from '../shared/hooks/useSocket';
 import '../i18n';
-import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
-import { getOrCreateDeviceId, getDeviceName } from '../utils/deviceId';
-import { apiClient } from '../api/client';
+import { getOrCreateDeviceId } from '../utils/deviceId';
 
 function SocketManager() {
   useSocket();
@@ -24,49 +21,35 @@ function SocketManager() {
  * Root navigator — the ONLY place where routing decisions based on state live.
  *
  * Decision tree:
- *   loading                → LoadingScreen
- *   !isConfigured          → NotesScreen  (user must enter branch code first)
- *   pendingDeviceInfo      → PendingDeviceScreen (device awaiting approval / suspended / rejected)
- *   isAuthenticated        → MainNavigator
- *   else                   → AuthNavigator (Login)
+ *   loading                           → LoadingScreen
+ *   !isDeviceApproved                 → NotesScreen (secret code gate mode)
+ *   isDeviceApproved && !isConfigured → NotesScreen (company slug mode — existing behaviour)
+ *   pendingDeviceInfo                 → PendingDeviceScreen (login-level device approval)
+ *   isAuthenticated                   → MainNavigator
+ *   else                              → AuthNavigator (Login)
  */
 export function AppNavigator() {
   const { isAuthenticated, isLoading: authLoading, finishLoading, pendingDeviceInfo } = useAuthStore();
-  const { isConfigured, isLoading: configLoading, load: loadConfig } = useConfigStore();
+  const { isConfigured, isDeviceApproved, isLoading: configLoading, load: loadConfig } = useConfigStore();
   const loadLang = useLangStore((s) => s.load);
 
   useEffect(() => {
     loadConfig();
     finishLoading();
     loadLang();
-    getOrCreateDeviceId().catch(() => {}); // generate UUID immediately on first launch
+    getOrCreateDeviceId().catch(() => {});
   }, []);
-
-  useEffect(() => {
-    if (!isConfigured) return;
-    (async () => {
-      try {
-        const alreadyTracked = await SecureStore.getItemAsync('app_install_tracked');
-        if (alreadyTracked) return;
-        const deviceId = await getOrCreateDeviceId();
-        const deviceName = getDeviceName();
-        await apiClient.post('/app-install', {
-          deviceId,
-          deviceName,
-          platform: Platform.OS,
-          appVersion: null,
-        });
-        await SecureStore.setItemAsync('app_install_tracked', '1');
-      } catch {
-        // fire-and-forget — silently ignore errors
-      }
-    })();
-  }, [isConfigured]);
 
   if (authLoading || configLoading) {
     return <LoadingScreen message="Starting up..." />;
   }
 
+  // Device not yet approved — show secret code gate (NotesScreen handles the mode internally)
+  if (!isDeviceApproved) {
+    return <NotesScreen />;
+  }
+
+  // Device approved but company slug not yet configured — show slug entry (existing NotesScreen behaviour)
   if (!isConfigured) {
     return <NotesScreen />;
   }

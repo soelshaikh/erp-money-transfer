@@ -15,6 +15,8 @@ export const tenantApi = {
     apiClient.patch(`/tenants/${id}/transaction-limits`, limits).then((r) => r.data),
   updateExportFormats: (id: string, formats: string[]) =>
     apiClient.patch(`/tenants/${id}/export-formats`, { formats }).then((r) => r.data),
+  updateCreditCommissionFlag: (id: string, enabled: boolean) =>
+    apiClient.patch(`/tenants/${id}/credit-commission-flag`, { enabled }).then((r) => r.data),
 
   // Super admin: browse company staff and manage devices cross-tenant
   listBranches: (tenantId: string) => apiClient.get(`/tenants/${tenantId}/branches`).then((r) => r.data.data),

@@ -42,6 +42,9 @@ import { BalanceSummaryScreen } from '../features/branch/screens/BalanceSummaryS
 // Screens — commission
 import { CommissionDetailScreen } from '../features/transaction/screens/CommissionDetailScreen';
 import { CommissionSummaryScreen } from '../features/transaction/screens/CommissionSummaryScreen';
+import { CommissionPayablesScreen } from '../features/branch/screens/CommissionPayablesScreen';
+import { CommissionSettlementsScreen } from '../features/branch/screens/CommissionSettlementsScreen';
+import { CommissionSettlementDetailScreen } from '../features/branch/screens/CommissionSettlementDetailScreen';
 
 // Screens — super admin
 import { TenantListScreen } from '../features/tenant/screens/TenantListScreen';
@@ -49,6 +52,9 @@ import { TenantDetailScreen } from '../features/tenant/screens/TenantDetailScree
 import { TenantStaffScreen } from '../features/tenant/screens/TenantStaffScreen';
 import { RegisterCompanyScreen } from '../features/tenant/screens/RegisterCompanyScreen';
 import { CreateHeadOfficeScreen } from '../features/tenant/screens/CreateHeadOfficeScreen';
+import { AppAccessRequestsScreen } from '../features/tenant/screens/AppAccessRequestsScreen';
+import { ExternalAccountListScreen } from '../features/branch/screens/ExternalAccountListScreen';
+import { ExternalAccountDetailScreen } from '../features/branch/screens/ExternalAccountDetailScreen';
 
 // Screens — notifications & reports
 import { NotificationsScreen } from '../features/notifications/screens/NotificationsScreen';
@@ -283,6 +289,25 @@ function DashboardStack() {
           })}
         />
       )}
+      {(isBranch || isHeadOffice) && (
+        <>
+          <Stack.Screen
+            name="CommissionPayables"
+            component={CommissionPayablesScreen}
+            options={{ title: t('nav.commissionPayables') }}
+          />
+          <Stack.Screen
+            name="CommissionSettlements"
+            component={CommissionSettlementsScreen}
+            options={{ title: t('nav.commissionSettlements') }}
+          />
+          <Stack.Screen
+            name="CommissionSettlementDetail"
+            component={CommissionSettlementDetailScreen}
+            options={{ title: 'Settlement Detail' }}
+          />
+        </>
+      )}
       <Stack.Screen
         name="TransactionDetail"
         component={TransactionDetailScreen}
@@ -332,6 +357,36 @@ function BranchStack() {
         name="EditBranchCommission"
         component={EditBranchCommissionScreen}
         options={({ route }: any) => ({ title: `${route.params?.branchName || t('nav.branches')} — ${t('nav.commission')}` })}
+      />
+      <Stack.Screen
+        name="CommissionPayables"
+        component={CommissionPayablesScreen}
+        options={{ title: t('nav.commissionPayables') }}
+      />
+      <Stack.Screen
+        name="CommissionSettlements"
+        component={CommissionSettlementsScreen}
+        options={{ title: t('nav.commissionSettlements') }}
+      />
+      <Stack.Screen
+        name="CommissionSettlementDetail"
+        component={CommissionSettlementDetailScreen}
+        options={{ title: 'Settlement Detail' }}
+      />
+    </Stack.Navigator>
+  );
+}
+
+function PartnersStack() {
+  const theme = useTheme();
+  const s = { headerStyle: { backgroundColor: theme.colors.surface }, headerTintColor: theme.colors.primary };
+  return (
+    <Stack.Navigator screenOptions={s}>
+      <Stack.Screen name="ExternalAccountList" component={ExternalAccountListScreen} options={{ title: 'Partners' }} />
+      <Stack.Screen
+        name="ExternalAccountDetail"
+        component={ExternalAccountDetailScreen}
+        options={({ route }: any) => ({ title: route.params?.accountName || 'Partner Detail' })}
       />
     </Stack.Navigator>
   );
@@ -393,6 +448,7 @@ function TenantStack() {
         component={UserDevicesScreen}
         options={({ route }: any) => ({ title: `${route.params?.userName || t('nav.staff')} — ${t('nav.devices')}` })}
       />
+      <Stack.Screen name="AppAccessRequests" component={AppAccessRequestsScreen} options={{ title: 'App Access Requests' }} />
     </Stack.Navigator>
   );
 }
@@ -517,6 +573,14 @@ export function MainNavigator() {
           name="Reports"
           component={ReportsStack}
           options={{ title: t('nav.reports'), tabBarIcon: icon('bar-chart') }}
+        />
+      )}
+
+      {(isHeadOffice || isBranch) && (
+        <Tab.Screen
+          name="Partners"
+          component={PartnersStack}
+          options={{ title: 'Partners', tabBarIcon: icon('people-outline') }}
         />
       )}
 

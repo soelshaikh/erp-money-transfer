@@ -157,6 +157,8 @@ export default class BranchController {
       const committedPayout = b.committedPayout ?? 0;
       const pendingPayout = b.pendingPayout ?? 0;
       const payoutCompleted = b.payoutCompleted ?? 0;
+      const commissionPayable = b.commissionPayable ?? 0;
+      const commissionReceivable = b.commissionReceivable ?? 0;
       return {
         id: b._id,
         name: b.name,
@@ -166,7 +168,9 @@ export default class BranchController {
         committedPayout,
         pendingPayout,
         payoutCompleted,
-        effectiveBalance: actualBalance - committedPayout - pendingPayout + payoutCompleted,
+        commissionPayable,
+        commissionReceivable,
+        effectiveBalance: actualBalance - committedPayout - pendingPayout + payoutCompleted - commissionPayable + commissionReceivable,
       };
     });
 
@@ -175,9 +179,11 @@ export default class BranchController {
         actual: acc.actual + b.actualBalance,
         committed: acc.committed + b.committedPayout,
         pending: acc.pending + b.pendingPayout,
+        commissionPayable: acc.commissionPayable + b.commissionPayable,
+        commissionReceivable: acc.commissionReceivable + b.commissionReceivable,
         effective: acc.effective + b.effectiveBalance,
       }),
-      { actual: 0, committed: 0, pending: 0, effective: 0 },
+      { actual: 0, committed: 0, pending: 0, commissionPayable: 0, commissionReceivable: 0, effective: 0 },
     );
 
     res.json({ success: true, data: { branches: mapped, totals } });

@@ -5,6 +5,8 @@ import MongoBranchRepository from './infrastructure/db/repositories/MongoBranchR
 import MongoTransactionRepository from './infrastructure/db/repositories/MongoTransactionRepository';
 import MongoBranchLedgerRepository from './infrastructure/db/repositories/MongoBranchLedgerRepository';
 import MongoDeviceSessionRepository from './infrastructure/db/repositories/MongoDeviceSessionRepository';
+import MongoCommissionPayableRepository from './infrastructure/db/repositories/MongoCommissionPayableRepository';
+import MongoCommissionSettlementRepository from './infrastructure/db/repositories/MongoCommissionSettlementRepository';
 
 // Infrastructure — Services
 import MongoAuditService from './infrastructure/services/MongoAuditService';
@@ -67,6 +69,18 @@ import GetCommissionOverrideReport from './application/use-cases/reports/GetComm
 import GetPeriodComparison from './application/use-cases/reports/GetPeriodComparison';
 import GetPaymentMethodReport from './application/use-cases/reports/GetPaymentMethodReport';
 
+// Use-cases — Commission Settlement
+import GetCommissionPayables from './application/use-cases/commissionSettlement/GetCommissionPayables';
+import GetCommissionSettlements from './application/use-cases/commissionSettlement/GetCommissionSettlements';
+import CreateCommissionSettlement from './application/use-cases/commissionSettlement/CreateCommissionSettlement';
+import CompleteCommissionSettlement from './application/use-cases/commissionSettlement/CompleteCommissionSettlement';
+
+// Controllers
+import CommissionSettlementController from './interfaces/http/controllers/CommissionSettlementController';
+
+// Routes
+import commissionSettlementRoutes from './interfaces/http/routes/commission-settlement.routes';
+
 // Use-cases — Branch delete
 import DeleteBranch from './application/use-cases/branch/DeleteBranch';
 
@@ -80,8 +94,25 @@ import GetAuditLogs from './application/use-cases/audit/GetAuditLogs';
 // Use-cases — Super Admin
 import ResetDevData from './application/use-cases/superAdmin/ResetDevData';
 
+// Use-cases — External Accounts
+import CreateExternalAccount from './application/use-cases/externalAccount/CreateExternalAccount';
+import GetExternalAccounts from './application/use-cases/externalAccount/GetExternalAccounts';
+import UpdateExternalAccount from './application/use-cases/externalAccount/UpdateExternalAccount';
+import AddExternalEntry from './application/use-cases/externalAccount/AddExternalEntry';
+import GetExternalLedger from './application/use-cases/externalAccount/GetExternalLedger';
+
+// Controllers
+import ExternalAccountController from './interfaces/http/controllers/ExternalAccountController';
+
+// Routes
+import externalAccountRoutes from './interfaces/http/routes/external-account.routes';
+
 // Use-cases — App Install
 import RegisterAppInstall from './application/use-cases/appInstall/RegisterAppInstall';
+import RequestAppAccess from './application/use-cases/appInstall/RequestAppAccess';
+import ApproveAppAccess from './application/use-cases/appInstall/ApproveAppAccess';
+import RejectAppAccess from './application/use-cases/appInstall/RejectAppAccess';
+import ListAppAccess from './application/use-cases/appInstall/ListAppAccess';
 
 // Use-cases — Device Sessions
 import CreateDeviceSession from './application/use-cases/device/CreateDeviceSession';
@@ -123,6 +154,8 @@ export default function buildContainer(io: any) {
   const transactionRepository = new MongoTransactionRepository();
   const branchLedgerRepository = new MongoBranchLedgerRepository();
   const deviceSessionRepository = new MongoDeviceSessionRepository();
+  const commissionPayableRepository = new MongoCommissionPayableRepository();
+  const commissionSettlementRepository = new MongoCommissionSettlementRepository();
 
   // Services
   const auditService = new MongoAuditService();
@@ -154,7 +187,7 @@ export default function buildContainer(io: any) {
   const createTransaction = new CreateTransaction({ transactionRepository, branchRepository, tenantRepository, notificationService, auditService, branchLedgerRepository });
   const approveTransaction = new ApproveTransaction({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository });
   const rejectTransaction = new RejectTransaction({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository });
-  const completePayment = new CompletePayment({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository });
+  const completePayment = new CompletePayment({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository, tenantRepository, commissionPayableRepository });
   const getTransactions = new GetTransactions({ transactionRepository });
   const getTransaction = new GetTransaction({ transactionRepository });
 
@@ -199,13 +232,30 @@ export default function buildContainer(io: any) {
     getPeriodComparisonUC: getPeriodComparison,
     getPaymentMethodReportUC: getPaymentMethodReport,
   });
+  const getCommissionPayables = new GetCommissionPayables({ commissionPayableRepository });
+  const getCommissionSettlements = new GetCommissionSettlements({ commissionSettlementRepository });
+  const createCommissionSettlement = new CreateCommissionSettlement({ commissionPayableRepository, commissionSettlementRepository, branchRepository });
+  const completeCommissionSettlement = new CompleteCommissionSettlement({ commissionPayableRepository, commissionSettlementRepository, branchLedgerRepository, auditService });
+  const commissionSettlementController = new CommissionSettlementController({ getCommissionPayables, getCommissionSettlements, createCommissionSettlement, completeCommissionSettlement, commissionSettlementRepository });
+
   const getAuditLogs = new GetAuditLogs();
   const deleteBranch = new DeleteBranch({ branchRepository, notificationService, auditService });
   const suspendUser = new SuspendUser({ userRepository, notificationService, auditService });
   const getUserActiveTransactions = new GetUserActiveTransactions({ userRepository, transactionRepository });
   const resetDevData = new ResetDevData();
+  const createExternalAccount = new CreateExternalAccount();
+  const getExternalAccounts   = new GetExternalAccounts();
+  const updateExternalAccount = new UpdateExternalAccount();
+  const addExternalEntry      = new AddExternalEntry();
+  const getExternalLedger     = new GetExternalLedger();
+  const externalAccountController = new ExternalAccountController({ createExternalAccount, getExternalAccounts, updateExternalAccount, addExternalEntry, getExternalLedger });
+
   const registerAppInstall = new RegisterAppInstall();
-  const appInstallController = new AppInstallController({ registerAppInstall });
+  const requestAppAccess   = new RequestAppAccess({ notificationService });
+  const approveAppAccess   = new ApproveAppAccess();
+  const rejectAppAccess    = new RejectAppAccess();
+  const listAppAccess      = new ListAppAccess();
+  const appInstallController = new AppInstallController({ registerAppInstall, requestAppAccess, approveAppAccess, rejectAppAccess, listAppAccess });
 
   // Controllers
   const authController = new AuthController({ loginUseCase, refreshTokenUseCase, tenantRepository });
@@ -247,11 +297,15 @@ export default function buildContainer(io: any) {
     reportController,
     auditLogController,
     deviceSessionController,
+    commissionSettlementController,
     reportRoutes,
     notificationRoutes,
     auditLogRoutes,
     deviceSessionRoutes,
     appInstallController,
     appInstallRoutes,
+    commissionSettlementRoutes,
+    externalAccountController,
+    externalAccountRoutes,
   };
 }

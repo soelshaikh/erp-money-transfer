@@ -75,17 +75,26 @@ export function TenantListScreen({ navigation }: Props) {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity
-          onPress={() => navigation.navigate('UserDevices', {
-            userId: user?.id,
-            userName: user?.name || 'Super Admin',
-            crossTenantId: user?.tenantId,
-          })}
-          style={{ marginRight: theme.spacing.md, padding: 4 }}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="shield-checkmark-outline" size={22} color={theme.colors.primary} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: theme.spacing.sm }}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('AppAccessRequests')}
+            style={{ padding: 4 }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="phone-portrait-outline" size={22} color={theme.colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('UserDevices', {
+              userId: user?.id,
+              userName: user?.name || 'Super Admin',
+              crossTenantId: user?.tenantId,
+            })}
+            style={{ padding: 4 }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="shield-checkmark-outline" size={22} color={theme.colors.primary} />
+          </TouchableOpacity>
+        </View>
       ),
     });
   }, [navigation, theme, user]);

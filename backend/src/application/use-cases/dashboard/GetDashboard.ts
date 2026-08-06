@@ -40,6 +40,8 @@ export default class GetDashboard {
         result.committedPayout = branch.committedPayout ?? 0;
         result.pendingPayout = branch.pendingPayout ?? 0;
         result.payoutCompleted = branch.payoutCompleted ?? 0;
+        result.commissionPayable = branch.commissionPayable ?? 0;
+        result.commissionReceivable = branch.commissionReceivable ?? 0;
       }
     }
 

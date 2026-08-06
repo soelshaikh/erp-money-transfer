@@ -25,6 +25,8 @@
     loginActivity: 'પ્રવૃત્તિ',
     auditLog: 'Audit',
     transactionDetails: 'વ્યવહાર',
+    commissionPayables: 'ખેપ ચૂકવવાની',
+    commissionSettlements: 'ખેપ સેટલમેન્ટ',
   },
 
   common: {

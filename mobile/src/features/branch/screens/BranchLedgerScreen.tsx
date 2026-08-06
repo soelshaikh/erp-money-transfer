@@ -69,6 +69,11 @@ export function BranchLedgerScreen({ route }: Props) {
     collection_reversed: { label: t('ledger.cancelled'), icon: 'close-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
     pending_payout: { label: t('ledger.pendingReserved'), icon: 'hourglass-outline', affectsLabel: t('ledger.effectiveOnly'), isActual: false },
     pending_payout_reversed: { label: t('ledger.pendingCleared'), icon: 'checkmark-circle-outline', affectsLabel: t('ledger.effectiveOnly'), isActual: false },
+    commission_earned: { label: 'Commission Earned', icon: 'cash-outline', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    commission_payable: { label: 'Commission Payable', icon: 'swap-horizontal-outline', affectsLabel: 'Effective Only', isActual: false },
+    commission_receivable: { label: 'Commission Receivable', icon: 'swap-horizontal-outline', affectsLabel: 'Effective Only', isActual: false },
+    commission_settlement_out: { label: 'Commission Settled (Out)', icon: 'arrow-up-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    commission_settlement_in: { label: 'Commission Settled (In)', icon: 'arrow-down-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
   };
 
   const [page, setPage] = useState(1);
@@ -89,6 +94,11 @@ export function BranchLedgerScreen({ route }: Props) {
     navigation.setOptions({
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: theme.spacing.md, gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('CommissionPayables')}
+          >
+            <Ionicons name="swap-horizontal-outline" size={22} color={theme.colors.primary} />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => navigation.navigate('BranchDailyBalances', { branchId, branchName: branchName || 'Branch' })}
           >
@@ -143,6 +153,8 @@ export function BranchLedgerScreen({ route }: Props) {
   const actualBalance: number = branch.actualBalance ?? 0;
   const committedPayout: number = branch.committedPayout ?? 0;
   const pendingPayout: number = branch.pendingPayout ?? 0;
+  const commissionPayable: number = branch.commissionPayable ?? 0;
+  const commissionReceivable: number = branch.commissionReceivable ?? 0;
   const effectiveBalance: number = branch.effectiveBalance ?? (actualBalance - committedPayout - pendingPayout);
   const openingBalance: number | null = branch.openingBalance ?? null;
 
@@ -326,10 +338,26 @@ export function BranchLedgerScreen({ route }: Props) {
               </View>
             )}
             {committedPayout > 0 && (
-              <View style={{ backgroundColor: withAlpha('#f59e0b', 0.09), borderRadius: theme.borderRadius.sm, padding: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ backgroundColor: withAlpha('#f59e0b', 0.09), borderRadius: theme.borderRadius.sm, padding: 8, flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: (commissionPayable > 0 || commissionReceivable > 0) ? 6 : 0 }}>
                 <Ionicons name="time-outline" size={14} color="#f59e0b" />
                 <Text style={[theme.typography.caption, { color: '#f59e0b', flex: 1 }]}>
                   {fmtAmt(committedPayout)} {t('ledger.committed')}
+                </Text>
+              </View>
+            )}
+            {commissionPayable > 0 && (
+              <View style={{ backgroundColor: withAlpha(theme.colors.warning, 0.08), borderRadius: theme.borderRadius.sm, padding: 8, flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: commissionReceivable > 0 ? 6 : 0 }}>
+                <Ionicons name="swap-horizontal-outline" size={14} color={theme.colors.warning} />
+                <Text style={[theme.typography.caption, { color: theme.colors.warning, flex: 1 }]}>
+                  {fmtAmt(commissionPayable)} commission payable to sending branch
+                </Text>
+              </View>
+            )}
+            {commissionReceivable > 0 && (
+              <View style={{ backgroundColor: withAlpha(theme.colors.success, 0.08), borderRadius: theme.borderRadius.sm, padding: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="swap-horizontal-outline" size={14} color={theme.colors.success} />
+                <Text style={[theme.typography.caption, { color: theme.colors.success, flex: 1 }]}>
+                  {fmtAmt(commissionReceivable)} commission receivable from payout branch
                 </Text>
               </View>
             )}

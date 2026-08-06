@@ -14,6 +14,7 @@ const featuresSchema = new mongoose.Schema({
   smsNotifications: { type: Boolean, default: true },
   deviceApprovalRequired: { type: Boolean, default: false },
   exportFormats: { type: [String], default: ['csv', 'excel', 'pdf'] },
+  creditCommissionToSendingBranch: { type: Boolean, default: false },
 }, { _id: false });
 
 const commissionSchema = new mongoose.Schema({

@@ -72,6 +72,8 @@ export function TenantDetailScreen({ route, navigation }: Props) {
   const dailyLimitRef = useRef<TextInput>(null);
 
   const [localExportFormats, setLocalExportFormats] = useState<string[]>(['csv', 'excel', 'pdf']);
+  const [creditCommFlag, setCreditCommFlag] = useState(false);
+  const [savingCreditCommFlag, setSavingCreditCommFlag] = useState(false);
 
   const { data: tenant, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['tenant', tenantId],
@@ -81,6 +83,7 @@ export function TenantDetailScreen({ route, navigation }: Props) {
   useEffect(() => {
     if (tenant) {
       setLocalExportFormats((tenant as any)?.features?.exportFormats ?? ['csv', 'excel', 'pdf']);
+      setCreditCommFlag((tenant as any)?.features?.creditCommissionToSendingBranch ?? false);
     }
   }, [tenant]);
 
@@ -143,6 +146,20 @@ export function TenantDetailScreen({ route, navigation }: Props) {
     onSuccess: invalidate,
     onError: (e: any) => Alert.alert('Error', parseApiError(e) ?? 'Failed to update export formats'),
   });
+
+  const handleToggleCreditCommFlag = async (newVal: boolean) => {
+    setCreditCommFlag(newVal);
+    setSavingCreditCommFlag(true);
+    try {
+      await tenantApi.updateCreditCommissionFlag(tenantId, newVal);
+      invalidate();
+    } catch (e: any) {
+      setCreditCommFlag(!newVal);
+      Alert.alert('Error', parseApiError(e) ?? 'Failed to update setting');
+    } finally {
+      setSavingCreditCommFlag(false);
+    }
+  };
 
   const toggleExportFormat = (fmt: string) => {
     setLocalExportFormats(prev =>
@@ -321,6 +338,53 @@ export function TenantDetailScreen({ route, navigation }: Props) {
           loading={exportFormatsMutation.isPending}
           disabled={exportFormatsMutation.isPending}
         />
+      </AppCard>
+
+      <AppCard style={{ marginBottom: theme.spacing.md }}>
+        <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.xs }]}>COMMISSION ROUTING</Text>
+        <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginBottom: theme.spacing.md }]}>
+          When enabled, commission on receiver-pays transactions is credited to the sending branch. The payout branch shows a pending payable until settled.
+        </Text>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => !savingCreditCommFlag && handleToggleCreditCommFlag(!creditCommFlag)}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingVertical: theme.spacing.sm,
+            paddingHorizontal: theme.spacing.md,
+            borderRadius: theme.borderRadius.md,
+            backgroundColor: creditCommFlag ? withAlpha(theme.colors.primary, 0.07) : withAlpha(theme.colors.textSecondary, 0.06),
+            borderWidth: 1,
+            borderColor: creditCommFlag ? withAlpha(theme.colors.primary, 0.25) : theme.colors.divider,
+          }}
+        >
+          <View style={{ flex: 1, marginRight: theme.spacing.md }}>
+            <Text style={[theme.typography.body, { color: theme.colors.text, fontWeight: '600' }]}>
+              Credit Commission to Sending Branch
+            </Text>
+            <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}>
+              {creditCommFlag ? 'Enabled — sending branch earns commission' : 'Disabled — payout branch earns commission (default)'}
+            </Text>
+          </View>
+          <View style={{
+            width: 44,
+            height: 24,
+            borderRadius: 12,
+            backgroundColor: creditCommFlag ? theme.colors.primary : theme.colors.divider,
+            justifyContent: 'center',
+            paddingHorizontal: 2,
+          }}>
+            <View style={{
+              width: 20,
+              height: 20,
+              borderRadius: 10,
+              backgroundColor: theme.colors.surface,
+              alignSelf: creditCommFlag ? 'flex-end' : 'flex-start',
+            }} />
+          </View>
+        </TouchableOpacity>
       </AppCard>
 
       <AppCard>
