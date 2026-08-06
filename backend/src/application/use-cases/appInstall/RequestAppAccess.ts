@@ -20,22 +20,13 @@ export default class RequestAppAccess {
       return { status: 'invalid' };
     }
 
-    const existing = await AppInstallModel.findOne({ deviceId });
-
-    if (existing) {
-      // Rejected devices get same response as wrong code
-      if ((existing as any).status === APP_ACCESS_STATUS.REJECTED) return { status: 'invalid' };
-      // Pending devices with correct code → auto-approve now
-      if ((existing as any).status === APP_ACCESS_STATUS.PENDING) {
-        existing.status = APP_ACCESS_STATUS.APPROVED;
-        existing.approvedAt = new Date();
-        await existing.save();
-        return { status: APP_ACCESS_STATUS.APPROVED };
-      }
-      return { status: (existing as any).status };
+    // Rejected devices — treat same as wrong code even with correct secret
+    const existing = await AppInstallModel.findOne({ deviceId }).lean();
+    if (existing && (existing as any).status === APP_ACCESS_STATUS.REJECTED) {
+      return { status: 'invalid' };
     }
 
-    // New device with correct code → create as approved immediately
+    // New device or pending device with correct code → approve immediately
     return this._approveDevice({ deviceId, deviceName, platform, ip, userAgent });
   }
 
