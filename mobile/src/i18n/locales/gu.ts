@@ -101,6 +101,7 @@
     blockedHint: '1 hr → પ્રવેશ.',
     loggedInAs: 'પ્રવેશ:',
     backToLogin: '← પ્રવેશ',
+    checkingApproval: 'મંજૂરી તપાસી રહ્યા છીએ…',
   },
 
   dash: {

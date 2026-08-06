@@ -43,15 +43,10 @@ export function NotesScreen() {
         platform: Platform.OS,
       });
       const status: string = res.data?.data?.status;
-
       if (status === 'approved') {
         await setDeviceStatus('approved');
-        // configStore update triggers AppNavigator to re-render into slug mode
       }
-      // pending / invalid / rejected — look identical to the user: just "Done ✓"
-    } catch {
-      // network error — silently act like a note save
-    }
+    } catch (_e) {}
     setSaved(true);
     setLoading(false);
   };
@@ -73,9 +68,7 @@ export function NotesScreen() {
         setLoading(false);
         return;
       }
-    } catch {
-      // Network unreachable — proceed anyway
-    }
+    } catch (_e) {}
     setLoading(false);
     await save(trimmed);
     setSaved(true);

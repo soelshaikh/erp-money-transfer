@@ -14,12 +14,14 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   pendingDeviceInfo: PendingDeviceInfo | null;
+  pendingLoginParams: any | null;
   login: (userData: any, tenantData: any, accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
   setLoading: (isLoading: boolean) => void;
   restoreSession: (userData: any, tenantData: any) => Promise<void>;
   finishLoading: () => void;
   setPendingDevice: (deviceStatus: string, user: any, tenant: any) => void;
+  setPendingLoginParams: (params: any) => void;
   clearPendingDevice: () => void;
 }
 
@@ -29,18 +31,19 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isLoading: true,
   pendingDeviceInfo: null,
+  pendingLoginParams: null,
 
   login: async (userData: any, tenantData: any, accessToken: string, refreshToken: string) => {
     await SecureStore.setItemAsync('accessToken', accessToken);
     await SecureStore.setItemAsync('refreshToken', refreshToken);
-    set({ user: userData, tenant: tenantData, isAuthenticated: true, isLoading: false, pendingDeviceInfo: null });
+    set({ user: userData, tenant: tenantData, isAuthenticated: true, isLoading: false, pendingDeviceInfo: null, pendingLoginParams: null });
   },
 
   logout: async () => {
     await SecureStore.deleteItemAsync('accessToken');
     await SecureStore.deleteItemAsync('refreshToken');
     queryClient.clear();
-    set({ user: null, tenant: null, isAuthenticated: false, isLoading: false, pendingDeviceInfo: null });
+    set({ user: null, tenant: null, isAuthenticated: false, isLoading: false, pendingDeviceInfo: null, pendingLoginParams: null });
   },
 
   setLoading: (isLoading: boolean) => set({ isLoading }),
@@ -55,5 +58,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ pendingDeviceInfo: { deviceStatus, user, tenant } });
   },
 
-  clearPendingDevice: () => set({ pendingDeviceInfo: null }),
+  setPendingLoginParams: (params: any) => set({ pendingLoginParams: params }),
+
+  clearPendingDevice: () => set({ pendingDeviceInfo: null, pendingLoginParams: null }),
 }));

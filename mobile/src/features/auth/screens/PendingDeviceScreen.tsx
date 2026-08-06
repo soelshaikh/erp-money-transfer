@@ -1,10 +1,13 @@
-import React from 'react';
-import { View, Text, ScrollView, SafeAreaView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, ScrollView, SafeAreaView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
 import { useAuthStore } from '../../../store/authStore';
+import { authApi } from '../api/authApi';
 import { withAlpha } from '../../../utils/colors';
+
+const POLL_INTERVAL_MS = 10_000;
 
 type StatusConfig = { icon: any; iconColor: string; title: string; body: string; hint: string };
 
@@ -12,7 +15,12 @@ export function PendingDeviceScreen() {
   const { t } = useTranslation();
   const theme = useTheme();
   const pendingDeviceInfo = useAuthStore((s: any) => s.pendingDeviceInfo);
+  const pendingLoginParams = useAuthStore((s: any) => s.pendingLoginParams);
   const clearPendingDevice = useAuthStore((s: any) => s.clearPendingDevice);
+  const setPendingDevice = useAuthStore((s: any) => s.setPendingDevice);
+  const login = useAuthStore((s: any) => s.login);
+
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const STATUS_CONFIG: Record<string, StatusConfig> = {
     pending: {
@@ -49,6 +57,31 @@ export function PendingDeviceScreen() {
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
   const userName = pendingDeviceInfo?.user?.name || '';
   const tenantName = pendingDeviceInfo?.tenant?.name || '';
+
+  // Poll the login endpoint every 10 seconds while status is 'pending'.
+  // When approved the server returns tokens and we auto-login.
+  // When rejected/suspended we update the card status and stop polling.
+  useEffect(() => {
+    if (status !== 'pending' || !pendingLoginParams) return;
+
+    const poll = async () => {
+      try {
+        const data = await authApi.login(pendingLoginParams);
+        if (data.deviceStatus === 'approved' && data.accessToken) {
+          login(data.user, data.tenant, data.accessToken, data.refreshToken);
+        } else if (data.deviceStatus === 'rejected' || data.deviceStatus === 'suspended') {
+          setPendingDevice(data.deviceStatus, data.user, data.tenant);
+        }
+      } catch {
+        // network error — will retry on next tick
+      }
+    };
+
+    pollingRef.current = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [status, pendingLoginParams]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -101,6 +134,16 @@ export function PendingDeviceScreen() {
           <Text style={[theme.typography.body, { color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 22 }]}>
             {config.body}
           </Text>
+
+          {/* Auto-check indicator — only when still pending */}
+          {status === 'pending' && pendingLoginParams ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: theme.spacing.lg, gap: theme.spacing.xs }}>
+              <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+              <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+                {t('pending.checkingApproval')}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Hint */}

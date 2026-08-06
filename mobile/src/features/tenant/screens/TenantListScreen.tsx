@@ -85,7 +85,7 @@ export function TenantListScreen({ navigation }: Props) {
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => navigation.navigate('UserDevices', {
-              userId: user?.id,
+              userId: user?._id || user?.id,
               userName: user?.name || 'Super Admin',
               crossTenantId: user?.tenantId,
             })}

@@ -68,7 +68,7 @@ function AddEntryModal({ visible, onClose, onAdded, accountId, theme }: any) {
       return externalAccountApi.addEntry(accountId, {
         type: entryType,
         direction: dir,
-        amount: Math.round(parseFloat(amount) * 100),
+        amount: Math.round(parseFloat(amount)),
         description: description.trim() || undefined,
       });
     },
@@ -221,7 +221,7 @@ export function ExternalAccountDetailScreen() {
               {isNeg ? 'OWES US' : balance === 0 ? 'SETTLED' : 'CREDIT WITH US'}
             </Text>
             <Text style={{ color: balColor, fontWeight: '800', fontSize: 24 }} allowFontScaling={false}>
-              ₹{fmtAmt(Math.abs(balance))}
+              {fmtAmt(Math.abs(balance))}
             </Text>
           </View>
         </View>

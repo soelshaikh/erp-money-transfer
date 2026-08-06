@@ -89,8 +89,8 @@ const en = {
   pending: {
     pendingTitle: 'Approval Pending',
     pendingBody:
-      'Your login request has been sent to the head office. Once approved, please login again to access the app.',
-    pendingHint: 'You will need to login again after approval.',
+      'Your login request has been sent to the head office. You will be signed in automatically once approved.',
+    pendingHint: 'This screen checks for approval every 10 seconds.',
     suspendedTitle: 'Device Suspended',
     suspendedBody:
       'Access from this device has been suspended by the administrator. Contact your head office for assistance.',
@@ -105,6 +105,7 @@ const en = {
     blockedHint: 'Wait 1 hour, then try logging in again.',
     loggedInAs: 'Logged in as',
     backToLogin: 'Back to Login',
+    checkingApproval: 'Checking for approval…',
   },
 
   dash: {

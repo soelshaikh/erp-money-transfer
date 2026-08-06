@@ -72,11 +72,6 @@ export async function downloadReport(params: {
   period?: string;
   branchId?: string;
 }): Promise<void> {
-  const extensionMap: Record<string, string> = { excel: 'xlsx', pdf: 'pdf', csv: 'csv' };
-  const ext = extensionMap[params.format];
-  const typeSlug = params.reportType || 'transactions';
-  const localUri = `${FileSystem.cacheDirectory}report_${typeSlug}_${params.format}.${ext}`;
-
   const queryParams: Record<string, string> = { format: params.format };
   if (params.reportType) queryParams.reportType = params.reportType;
   if (params.startDate) queryParams.startDate = params.startDate;
@@ -85,29 +80,19 @@ export async function downloadReport(params: {
   if (params.period) queryParams.period = params.period;
   if (params.branchId) queryParams.branchId = params.branchId;
 
-  // apiClient interceptor handles token refresh automatically
-  const response = await apiClient.get('/reports/export', {
-    params: queryParams,
-    responseType: 'arraybuffer',
-  });
+  // Backend returns { base64, contentType, filename } — no arraybuffer needed
+  const response = await apiClient.get('/reports/export', { params: queryParams });
+  const { base64, filename } = response.data.data as { base64: string; contentType: string; filename: string };
 
-  // Convert ArrayBuffer → base64 in 1 KB chunks to avoid call-stack overflow
-  const uint8 = new Uint8Array(response.data as ArrayBuffer);
-  const CHUNK = 1024;
-  const parts: string[] = [];
-  for (let i = 0; i < uint8.length; i += CHUNK) {
-    parts.push(String.fromCharCode(...Array.from(uint8.subarray(i, i + CHUNK))));
-  }
-  const base64 = btoa(parts.join(''));
+  if (!base64) throw new Error('Export failed: no data received from server');
 
-  await FileSystem.writeAsStringAsync(localUri, base64, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  const localUri = `${FileSystem.cacheDirectory}${filename}`;
+
+  // Write base64 string directly — no btoa/Uint8Array conversion needed
+  await FileSystem.writeAsStringAsync(localUri, base64, { encoding: 'base64' as any });
 
   const isAvailable = await Sharing.isAvailableAsync();
-  if (!isAvailable) {
-    throw new Error('Sharing is not available on this device');
-  }
+  if (!isAvailable) throw new Error('Sharing is not available on this device');
 
   const mimeMap: Record<string, string> = {
     pdf: 'application/pdf',

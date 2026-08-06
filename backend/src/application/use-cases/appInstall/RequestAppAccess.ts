@@ -10,23 +10,18 @@ export default class RequestAppAccess {
 
     if (!deviceId) return { status: 'invalid' };
 
-    // If no access code is configured in env, the gate is disabled — auto-approve all devices
+    // If no access code is configured, the gate is disabled — auto-approve all devices
     if (!env.APP_ACCESS_CODE) {
       return this._approveDevice({ deviceId, deviceName, platform, ip, userAgent });
     }
 
-    // Code configured but doesn't match — treat same as rejected (reveal nothing)
-    if (secretCode !== env.APP_ACCESS_CODE) {
-      return { status: 'invalid' };
-    }
+    if (secretCode !== env.APP_ACCESS_CODE) return { status: 'invalid' };
 
-    // Rejected devices — treat same as wrong code even with correct secret
     const existing = await AppInstallModel.findOne({ deviceId }).lean();
     if (existing && (existing as any).status === APP_ACCESS_STATUS.REJECTED) {
       return { status: 'invalid' };
     }
 
-    // New device or pending device with correct code → approve immediately
     return this._approveDevice({ deviceId, deviceName, platform, ip, userAgent });
   }
 

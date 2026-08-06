@@ -88,9 +88,15 @@ export default class ReportController {
       format,
       reportType,
     });
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(buffer);
+    // Return base64-encoded file so React Native can write it without arraybuffer issues
+    res.json({
+      success: true,
+      data: {
+        base64: (buffer as Buffer).toString('base64'),
+        contentType,
+        filename,
+      },
+    });
   }
 
   async loginReport(req: any, res: any, next: any): Promise<void> {

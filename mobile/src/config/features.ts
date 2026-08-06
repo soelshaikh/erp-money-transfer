@@ -4,5 +4,5 @@
  */
 export const FEATURES = {
   /** Login Activity & Active Sessions screen — temporarily hidden */
-  SHOW_LOGIN_ACTIVITY: false,
+  SHOW_LOGIN_ACTIVITY: true,
 };

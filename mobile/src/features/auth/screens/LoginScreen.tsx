@@ -17,6 +17,7 @@ export function LoginScreen() {
   const theme = useTheme();
   const login = useAuthStore((s: any) => s.login);
   const setPendingDevice = useAuthStore((s: any) => s.setPendingDevice);
+  const setPendingLoginParams = useAuthStore((s: any) => s.setPendingLoginParams);
   const { branchCode, clear: clearConfig, save: saveConfig } = useConfigStore();
 
   const [form, setForm] = useState<{ tenantSlug: string; username: string; password: string }>({
@@ -51,6 +52,14 @@ export function LoginScreen() {
         login(data.user, data.tenant, data.accessToken, data.refreshToken);
       } else {
         setPendingDevice(data.deviceStatus, data.user, data.tenant);
+        setPendingLoginParams({
+          tenantSlug:  form.tenantSlug,
+          username:    form.username,
+          password:    form.password,
+          deviceId:    deviceIdRef.current,
+          deviceName:  deviceNameRef.current,
+          platform:    Platform.OS,
+        });
       }
     },
   });

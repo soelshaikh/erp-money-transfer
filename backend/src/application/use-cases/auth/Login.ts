@@ -56,7 +56,11 @@ export default class Login {
 
     // Device session check — skip only for super_admin or if no deviceId sent
     if (user.role !== ROLES.SUPER_ADMIN && params.deviceId && this.createDeviceSession) {
-      const deviceApprovalRequired = !!tenant.features?.deviceApprovalRequired;
+      // head_office is always auto-approved (they're the tenant admin — blocking them creates a dead-lock).
+      // branch users require device approval by default; opt out by setting features.deviceApprovalRequired = false.
+      const deviceApprovalRequired =
+        user.role === ROLES.BRANCH &&
+        tenant.features?.deviceApprovalRequired !== false;
       const { deviceStatus } = await this.createDeviceSession.execute({
         tenantId:    tenant._id,
         userId:      user._id,
