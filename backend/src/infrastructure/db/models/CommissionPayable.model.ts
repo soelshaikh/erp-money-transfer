@@ -11,7 +11,7 @@ const commissionPayableSchema = new mongoose.Schema({
   transactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', required: true },
   tokenNumber: { type: String, required: true },
   amount: { type: Number, required: true },
-  status: { type: String, enum: ['pending', 'settled'], default: 'pending' },
+  status: { type: String, enum: ['expected', 'approved', 'pending_settlement', 'in_settlement', 'cancelled', 'reversed', 'settled'], default: 'expected' },
   settlementId: { type: mongoose.Schema.Types.ObjectId, ref: 'CommissionSettlement', default: null },
 }, {
   timestamps: true,

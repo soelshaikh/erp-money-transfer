@@ -7,6 +7,7 @@ export default class RejectTransaction {
   auditService: any;
   branchLedgerRepository: any;
   branchRepository: any;
+  commissionPayableRepository: any;
 
   constructor(deps: any) {
     this.transactionRepository = deps.transactionRepository;
@@ -14,6 +15,7 @@ export default class RejectTransaction {
     this.auditService = deps.auditService;
     this.branchLedgerRepository = deps.branchLedgerRepository;
     this.branchRepository = deps.branchRepository;
+    this.commissionPayableRepository = deps.commissionPayableRepository;
   }
 
   async execute(params: any): Promise<any> {
@@ -26,6 +28,9 @@ export default class RejectTransaction {
       if (!existing) throw new NotFoundError('Transaction');
       throw new ConflictError(`Transaction already ${existing.approvalStatus}`);
     }
+
+    // Cancel commission payable if one exists — transaction rejected, commission will never be earned
+    this.commissionPayableRepository.updateStatusByTransactionId(tenantId, transactionId, 'cancelled').catch(() => {});
 
     // Reverse the collection credit — collection branch returns the cash to sender
     await this.branchLedgerRepository.addEntry(tenantId, transaction.collectionBranchId.toString(), {

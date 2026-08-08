@@ -85,20 +85,26 @@ export default class CompletePayment {
           tokenNumber: completed.tokenNumber,
         });
 
-        // CommissionPayable record for settlement tracking
-        await this.commissionPayableRepository.create({
-          tenantId,
-          fromBranchId: completed.payoutBranchId,
-          fromBranchName: payoutBranch?.name || '',
-          fromBranchCode: payoutBranch?.code || '',
-          toBranchId: completed.collectionBranchId,
-          toBranchName: collectionBranch?.name || '',
-          toBranchCode: collectionBranch?.code || '',
-          transactionId: completed._id,
-          tokenNumber: completed.tokenNumber,
-          amount: completed.commissionAmount,
-          status: 'pending',
-        });
+        // Advance CommissionPayable to pending_settlement (created at expected on transaction creation)
+        // If record doesn't exist (flag was OFF at creation), create it now as a safety net
+        const existing = await this.commissionPayableRepository.findByTransactionId(tenantId, completed._id.toString());
+        if (existing) {
+          await this.commissionPayableRepository.updateStatusByTransactionId(tenantId, completed._id.toString(), 'pending_settlement');
+        } else {
+          await this.commissionPayableRepository.create({
+            tenantId,
+            fromBranchId: completed.payoutBranchId,
+            fromBranchName: payoutBranch?.name || '',
+            fromBranchCode: payoutBranch?.code || '',
+            toBranchId: completed.collectionBranchId,
+            toBranchName: collectionBranch?.name || '',
+            toBranchCode: collectionBranch?.code || '',
+            transactionId: completed._id,
+            tokenNumber: completed.tokenNumber,
+            amount: completed.commissionAmount,
+            status: 'pending_settlement',
+          });
+        }
       } else {
         // Flag OFF (default): payout branch earns commission immediately
         await this.branchLedgerRepository.addEntry(tenantId, completed.payoutBranchId.toString(), {

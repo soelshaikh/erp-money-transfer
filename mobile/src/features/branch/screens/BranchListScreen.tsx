@@ -35,7 +35,10 @@ function BranchItem({ item, theme, onDelete, onToggle, onViewLedger, onEditCommi
   const isActive = item.status === 'active';
   const actualBalance: number = item.balance ?? 0;
   const committed: number = item.committedPayout ?? 0;
-  const effectiveBalance: number = actualBalance - committed;
+  const pendingPayout: number = item.pendingPayout ?? 0;
+  const payoutCompleted: number = item.payoutCompleted ?? 0;
+  const commissionPayable: number = item.commissionPayable ?? 0;
+  const effectiveBalance: number = actualBalance - committed - pendingPayout + payoutCompleted - commissionPayable;
   const isNeg = effectiveBalance < 0;
   const effColor = isNeg ? theme.colors.error : effectiveBalance === 0 ? theme.colors.textSecondary : theme.colors.success;
 
@@ -106,7 +109,7 @@ function BranchItem({ item, theme, onDelete, onToggle, onViewLedger, onEditCommi
             <Text style={{ color: effColor, fontWeight: '700', fontSize: 13 }} allowFontScaling={false}>
               {isNeg ? '− ' : ''}{fmtAmt(effectiveBalance)}
             </Text>
-            {committed > 0 && (
+            {(committed > 0 || pendingPayout > 0 || commissionPayable > 0) && (
               <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, fontSize: 10 }]} allowFontScaling={false}>
                 {t('ledger.actualShort')} {fmtAmt(actualBalance)}
               </Text>

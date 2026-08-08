@@ -170,7 +170,7 @@ export default class BranchController {
         payoutCompleted,
         commissionPayable,
         commissionReceivable,
-        effectiveBalance: actualBalance - committedPayout - pendingPayout + payoutCompleted - commissionPayable + commissionReceivable,
+        effectiveBalance: actualBalance - committedPayout - pendingPayout + payoutCompleted - commissionPayable,
       };
     });
 

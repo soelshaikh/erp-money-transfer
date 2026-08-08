@@ -1,5 +1,7 @@
 export default abstract class ICommissionPayableRepository {
   abstract create(data: any): Promise<any>;
+  abstract findByTransactionId(tenantId: string, transactionId: string): Promise<any | null>;
+  abstract updateStatusByTransactionId(tenantId: string, transactionId: string, status: string): Promise<void>;
   abstract findPending(tenantId: string, fromBranchId?: string, toBranchId?: string): Promise<any[]>;
   abstract findAll(tenantId: string, filters: any): Promise<{ data: any[]; total: number; page: number; limit: number }>;
   abstract reserveForSettlement(tenantId: string, ids: string[], settlementId: string): Promise<void>;

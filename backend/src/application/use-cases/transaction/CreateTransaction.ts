@@ -12,6 +12,7 @@ export default class CreateTransaction {
   notificationService: any;
   auditService: any;
   branchLedgerRepository: any;
+  commissionPayableRepository: any;
 
   constructor(deps: any) {
     this.transactionRepository = deps.transactionRepository;
@@ -20,6 +21,7 @@ export default class CreateTransaction {
     this.notificationService = deps.notificationService;
     this.auditService = deps.auditService;
     this.branchLedgerRepository = deps.branchLedgerRepository;
+    this.commissionPayableRepository = deps.commissionPayableRepository;
   }
 
   async execute(params: any): Promise<any> {
@@ -155,6 +157,24 @@ export default class CreateTransaction {
       event: 'collection',
       tokenNumber,
     });
+
+    // If creditCommissionToSendingBranch is ON and receiver pays, track commission lifecycle from creation
+    const isPayoutSide = commissionSide === COMMISSION_SIDE.PAYOUT;
+    if (isPayoutSide && commissionAmount > 0 && tenant.features?.creditCommissionToSendingBranch === true) {
+      this.commissionPayableRepository.create({
+        tenantId,
+        fromBranchId: payoutBranchId,
+        fromBranchName: payoutBranch.name,
+        fromBranchCode: payoutBranch.code,
+        toBranchId: collectionBranchId,
+        toBranchName: collectionBranch.name,
+        toBranchCode: collectionBranch.code,
+        transactionId: transaction._id,
+        tokenNumber,
+        amount: commissionAmount,
+        status: 'expected',
+      }).catch(() => {});
+    }
 
     logger.info({ transactionId: transaction._id, tokenNumber }, '[TXN:UC] ledger credited — dispatching notification to head_office');
 

@@ -28,7 +28,8 @@ export default class GetBranchLedger {
     const payoutCompleted = branch.payoutCompleted ?? 0;
     const commissionPayable = branch.commissionPayable ?? 0;
     const commissionReceivable = branch.commissionReceivable ?? 0;
-    const effectiveBalance = actualBalance - committedPayout - pendingPayout + payoutCompleted - commissionPayable + commissionReceivable;
+    // commissionReceivable excluded — not real cash until settlement completes
+    const effectiveBalance = actualBalance - committedPayout - pendingPayout + payoutCompleted - commissionPayable;
 
     return {
       branch: {

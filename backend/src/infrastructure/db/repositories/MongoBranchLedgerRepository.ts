@@ -25,8 +25,9 @@ import { todayIST } from '../../../utils/dateIST';
  * commission_settlement_in  → balance +amount              (collection branch receives cash)
  *                             commissionReceivable -amount (receivable cleared)
  *
- * Effective balance formula:
- *   balance − committedPayout − pendingPayout + payoutCompleted − commissionPayable + commissionReceivable
+ * Effective balance formula (live summary — GetBranchLedger + BranchController.balanceSummary):
+ *   balance − committedPayout − pendingPayout + payoutCompleted − commissionPayable
+ *   (commissionReceivable excluded — not real cash until settlement completes)
  */
 function buildIncrement(event: string, amount: number): Record<string, number> {
   switch (event) {

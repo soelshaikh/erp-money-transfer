@@ -8,8 +8,22 @@ export default class MongoCommissionPayableRepository extends ICommissionPayable
     return doc.toObject();
   }
 
+  async findByTransactionId(tenantId: string, transactionId: string) {
+    return CommissionPayableModel.findOne({
+      tenantId: new mongoose.Types.ObjectId(tenantId),
+      transactionId: new mongoose.Types.ObjectId(transactionId),
+    }).lean();
+  }
+
+  async updateStatusByTransactionId(tenantId: string, transactionId: string, status: string) {
+    await CommissionPayableModel.updateOne(
+      { tenantId: new mongoose.Types.ObjectId(tenantId), transactionId: new mongoose.Types.ObjectId(transactionId) },
+      { $set: { status } },
+    );
+  }
+
   async findPending(tenantId: string, fromBranchId?: string, toBranchId?: string) {
-    const query: any = { tenantId, status: 'pending', settlementId: null };
+    const query: any = { tenantId, status: 'pending_settlement', settlementId: null };
     if (fromBranchId) query.fromBranchId = new mongoose.Types.ObjectId(fromBranchId);
     if (toBranchId) query.toBranchId = new mongoose.Types.ObjectId(toBranchId);
     return CommissionPayableModel.find(query).sort({ createdAt: 1 }).lean();
@@ -34,11 +48,10 @@ export default class MongoCommissionPayableRepository extends ICommissionPayable
     return { data, total, page, limit };
   }
 
-  // Mark payables as reserved (linked to a pending settlement) to prevent double-settlement
   async reserveForSettlement(tenantId: string, ids: string[], settlementId: string) {
     await CommissionPayableModel.updateMany(
-      { tenantId, _id: { $in: ids.map(id => new mongoose.Types.ObjectId(id)) }, status: 'pending', settlementId: null },
-      { $set: { settlementId: new mongoose.Types.ObjectId(settlementId) } },
+      { tenantId, _id: { $in: ids.map(id => new mongoose.Types.ObjectId(id)) }, status: 'pending_settlement', settlementId: null },
+      { $set: { status: 'in_settlement', settlementId: new mongoose.Types.ObjectId(settlementId) } },
     );
   }
 
@@ -49,18 +62,17 @@ export default class MongoCommissionPayableRepository extends ICommissionPayable
     );
   }
 
-  // Release payables back to pending if a settlement is cancelled (future use)
   async releaseFromSettlement(tenantId: string, settlementId: string) {
     await CommissionPayableModel.updateMany(
-      { tenantId, settlementId: new mongoose.Types.ObjectId(settlementId), status: 'pending' },
-      { $set: { settlementId: null } },
+      { tenantId, settlementId: new mongoose.Types.ObjectId(settlementId), status: 'in_settlement' },
+      { $set: { status: 'pending_settlement', settlementId: null } },
     );
   }
 
-  // Returns grouped totals: how much each fromBranch owes each toBranch
+  // Returns grouped totals: how much each fromBranch owes each toBranch (only pending_settlement, not yet reserved)
   async getPendingSummary(tenantId: string) {
     return CommissionPayableModel.aggregate([
-      { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), status: 'pending', settlementId: null } },
+      { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), status: 'pending_settlement', settlementId: null } },
       {
         $group: {
           _id: { fromBranchId: '$fromBranchId', toBranchId: '$toBranchId' },

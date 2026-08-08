@@ -7,6 +7,7 @@ export default class ApproveTransaction {
   auditService: any;
   branchLedgerRepository: any;
   branchRepository: any;
+  commissionPayableRepository: any;
 
   constructor(deps: any) {
     this.transactionRepository = deps.transactionRepository;
@@ -14,6 +15,7 @@ export default class ApproveTransaction {
     this.auditService = deps.auditService;
     this.branchLedgerRepository = deps.branchLedgerRepository;
     this.branchRepository = deps.branchRepository;
+    this.commissionPayableRepository = deps.commissionPayableRepository;
   }
 
   async execute(params: any): Promise<any> {
@@ -26,6 +28,9 @@ export default class ApproveTransaction {
       if (!existing) throw new NotFoundError('Transaction');
       throw new ConflictError(`Transaction already ${existing.approvalStatus}`);
     }
+
+    // Advance commission payable lifecycle if one exists for this transaction
+    this.commissionPayableRepository.updateStatusByTransactionId(tenantId, transactionId, 'approved').catch(() => {});
 
     // Commit payout — first time payout branch balance is affected (pending_payout no longer written at creation)
     await this.branchLedgerRepository.addEntry(tenantId, transaction.payoutBranchId.toString(), {
