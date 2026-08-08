@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Image, TouchableOpacity, Alert, TextInput } from 'react-native';
+import Constants from 'expo-constants';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
@@ -159,6 +160,10 @@ export function LoginScreen() {
           loading={mutation.isPending}
           style={{ marginTop: theme.spacing.md }}
         />
+
+        <Text style={{ textAlign: 'center', color: theme.colors.textSecondary, fontSize: 12, marginTop: theme.spacing.xl }}>
+          {Constants.expoConfig?.version ?? '—'}
+        </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );

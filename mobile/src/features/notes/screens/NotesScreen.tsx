@@ -5,9 +5,12 @@ import {
   StatusBar, Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import Constants from 'expo-constants';
 import { useConfigStore } from '../../../store/configStore';
 import { apiClient } from '../../../api/client';
 import { getOrCreateDeviceId, getDeviceName } from '../../../utils/deviceId';
+
+const APP_VERSION = Constants.expoConfig?.version ?? '—';
 
 const LINE_HEIGHT   = 36;
 const LINE_COLOR    = '#C8D6E0';
@@ -45,8 +48,13 @@ export function NotesScreen() {
       const status: string = res.data?.data?.status;
       if (status === 'approved') {
         await setDeviceStatus('approved');
+        Alert.alert('✅ Approved', 'Device approved! Now enter your company slug.');
+      } else {
+        Alert.alert('❌ Wrong Code', `Server returned: "${status}"\nYou entered: "${trimmed}"`);
       }
-    } catch (_e) {}
+    } catch (e: any) {
+      Alert.alert('🔴 Network Error', `Could not reach the server.\n\n${e?.message || 'Unknown error'}\n\nURL: ${e?.config?.url || 'n/a'}`);
+    }
     setSaved(true);
     setLoading(false);
   };
@@ -116,6 +124,11 @@ export function NotesScreen() {
           autoCorrect={false}
           style={styles.input}
         />
+      </View>
+
+      <View style={styles.footer}>
+        {mode === 'gate' && <Text style={styles.devHintText}>DEV: ERP@Secret2024</Text>}
+        <Text style={styles.versionText}>v{APP_VERSION}</Text>
       </View>
 
     </KeyboardAvoidingView>
@@ -197,5 +210,20 @@ const styles = StyleSheet.create({
     color: INK_COLOR,
     fontFamily: Platform.OS === 'ios' ? 'Noteworthy-Light' : undefined,
     textAlignVertical: 'top',
+  },
+  footer: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 4,
+  },
+  devHintText: {
+    fontSize: 13,
+    color: '#E74C3C',
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  versionText: {
+    fontSize: 12,
+    color: '#7F8C8D',
   },
 });
