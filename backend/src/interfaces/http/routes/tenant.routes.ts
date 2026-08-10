@@ -26,6 +26,7 @@ export default function tenantRoutes(tenantController: any) {
   router.patch('/:id/commission', validate('updateTenantCommission'), tenantController.updateCommission);
   router.patch('/:id/export-formats', tenantController.updateExportFormats);
   router.patch('/:id/credit-commission-flag', tenantController.updateCreditCommissionFlag);
+  router.patch('/:id/device-approval', tenantController.updateDeviceApproval);
   router.post('/:id/head-office', validate('createHeadOfficeUser'), tenantController.createHeadOffice);
 
   return router;

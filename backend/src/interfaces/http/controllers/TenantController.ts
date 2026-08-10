@@ -41,6 +41,7 @@ export default class TenantController {
     this.removeUserDevice = this.removeUserDevice.bind(this);
     this.updateExportFormats = this.updateExportFormats.bind(this);
     this.updateCreditCommissionFlag = this.updateCreditCommissionFlag.bind(this);
+    this.updateDeviceApproval = this.updateDeviceApproval.bind(this);
   }
 
   async create(req: any, res: any) {
@@ -158,6 +159,14 @@ export default class TenantController {
     const { enabled } = req.body;
     await this.tenantRepository.update(req.params.id, { 'features.creditCommissionToSendingBranch': Boolean(enabled) });
     res.json({ success: true, data: { creditCommissionToSendingBranch: Boolean(enabled) } });
+  }
+
+  async updateDeviceApproval(req: any, res: any) {
+    const tenantDoc = await this.tenantRepository.findById(req.params.id);
+    if (!tenantDoc) throw new NotFoundError('Tenant');
+    const { enabled } = req.body;
+    await this.tenantRepository.update(req.params.id, { 'features.deviceApprovalRequired': Boolean(enabled) });
+    res.json({ success: true, data: { deviceApprovalRequired: Boolean(enabled) } });
   }
 
   async updateExportFormats(req: any, res: any) {

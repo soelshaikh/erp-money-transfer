@@ -74,6 +74,8 @@ export function TenantDetailScreen({ route, navigation }: Props) {
   const [localExportFormats, setLocalExportFormats] = useState<string[]>(['csv', 'excel', 'pdf']);
   const [creditCommFlag, setCreditCommFlag] = useState(false);
   const [savingCreditCommFlag, setSavingCreditCommFlag] = useState(false);
+  const [deviceApprovalFlag, setDeviceApprovalFlag] = useState(false);
+  const [savingDeviceApproval, setSavingDeviceApproval] = useState(false);
 
   const { data: tenant, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['tenant', tenantId],
@@ -84,6 +86,7 @@ export function TenantDetailScreen({ route, navigation }: Props) {
     if (tenant) {
       setLocalExportFormats((tenant as any)?.features?.exportFormats ?? ['csv', 'excel', 'pdf']);
       setCreditCommFlag((tenant as any)?.features?.creditCommissionToSendingBranch ?? false);
+      setDeviceApprovalFlag((tenant as any)?.features?.deviceApprovalRequired ?? false);
     }
   }, [tenant]);
 
@@ -146,6 +149,20 @@ export function TenantDetailScreen({ route, navigation }: Props) {
     onSuccess: invalidate,
     onError: (e: any) => Alert.alert('Error', parseApiError(e) ?? 'Failed to update export formats'),
   });
+
+  const handleToggleDeviceApproval = async (newVal: boolean) => {
+    setDeviceApprovalFlag(newVal);
+    setSavingDeviceApproval(true);
+    try {
+      await tenantApi.updateDeviceApproval(tenantId, newVal);
+      invalidate();
+    } catch (e: any) {
+      setDeviceApprovalFlag(!newVal);
+      Alert.alert('Error', parseApiError(e) ?? 'Failed to update setting');
+    } finally {
+      setSavingDeviceApproval(false);
+    }
+  };
 
   const handleToggleCreditCommFlag = async (newVal: boolean) => {
     setCreditCommFlag(newVal);
@@ -338,6 +355,48 @@ export function TenantDetailScreen({ route, navigation }: Props) {
           loading={exportFormatsMutation.isPending}
           disabled={exportFormatsMutation.isPending}
         />
+      </AppCard>
+
+      <AppCard style={{ marginBottom: theme.spacing.md }}>
+        <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.xs }]}>DEVICE APPROVAL</Text>
+        <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginBottom: theme.spacing.md }]}>
+          When enabled, each new phone a branch staff logs in from must be approved by head office before access is granted.
+        </Text>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => !savingDeviceApproval && handleToggleDeviceApproval(!deviceApprovalFlag)}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingVertical: theme.spacing.sm,
+            paddingHorizontal: theme.spacing.md,
+            borderRadius: theme.borderRadius.md,
+            backgroundColor: deviceApprovalFlag ? withAlpha(theme.colors.primary, 0.07) : withAlpha(theme.colors.textSecondary, 0.06),
+            borderWidth: 1,
+            borderColor: deviceApprovalFlag ? withAlpha(theme.colors.primary, 0.25) : theme.colors.divider,
+          }}
+        >
+          <View style={{ flex: 1, marginRight: theme.spacing.md }}>
+            <Text style={[theme.typography.body, { color: theme.colors.text, fontWeight: '600' }]}>
+              Require Device Approval
+            </Text>
+            <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}>
+              {deviceApprovalFlag ? 'Enabled — new devices need HO approval' : 'Disabled — staff logs in on any device instantly'}
+            </Text>
+          </View>
+          <View style={{
+            width: 44, height: 24, borderRadius: 12,
+            backgroundColor: deviceApprovalFlag ? theme.colors.primary : theme.colors.divider,
+            justifyContent: 'center', paddingHorizontal: 2,
+          }}>
+            <View style={{
+              width: 20, height: 20, borderRadius: 10,
+              backgroundColor: theme.colors.surface,
+              alignSelf: deviceApprovalFlag ? 'flex-end' : 'flex-start',
+            }} />
+          </View>
+        </TouchableOpacity>
       </AppCard>
 
       <AppCard style={{ marginBottom: theme.spacing.md }}>
