@@ -30,8 +30,8 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry) {
       const errorCode = (error.response?.data as any)?.error?.code;
 
-      // Account disabled — logout immediately, no retry
-      if (errorCode === 'ACCOUNT_DISABLED') {
+      // Account disabled or device revoked — logout immediately, no retry
+      if (errorCode === 'ACCOUNT_DISABLED' || errorCode === 'DEVICE_NOT_AUTHORIZED') {
         await SecureStore.deleteItemAsync('accessToken');
         await SecureStore.deleteItemAsync('refreshToken');
         useAuthStore.getState().logout();

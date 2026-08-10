@@ -103,6 +103,9 @@ const en = {
     blockedBody:
       'You have submitted too many device requests in a short time. Please wait an hour before trying again.',
     blockedHint: 'Wait 1 hour, then try logging in again.',
+    expiredTitle: 'Request Expired',
+    expiredBody: 'Your device approval request has been pending for too long and has expired.',
+    expiredHint: 'Go back to login and try again to submit a new request.',
     loggedInAs: 'Logged in as',
     backToLogin: 'Back to Login',
     checkingApproval: 'Checking for approval…',

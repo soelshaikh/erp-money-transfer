@@ -162,16 +162,16 @@ export default function buildContainer(io: any) {
   const notificationService = new SocketNotificationService(io);
 
   // Device session use-cases (created before loginUseCase so it can be injected)
-  const createDeviceSession = new CreateDeviceSession({ deviceSessionRepository, notificationService });
+  const createDeviceSession = new CreateDeviceSession({ deviceSessionRepository, userRepository, notificationService, auditService });
   const approveDeviceSession = new ApproveDeviceSession({ deviceSessionRepository, userRepository, auditService });
-  const rejectDeviceSession = new RejectDeviceSession({ deviceSessionRepository, auditService });
+  const rejectDeviceSession = new RejectDeviceSession({ deviceSessionRepository, userRepository, auditService });
   const suspendDeviceSession = new SuspendDeviceSession({ deviceSessionRepository, userRepository, auditService, notificationService });
   const listDeviceSessions = new ListDeviceSessions({ deviceSessionRepository });
   const suspendAllSessions = new SuspendAllSessions({ deviceSessionRepository, userRepository, auditService, notificationService });
 
   // Use-cases
   const loginUseCase = new Login({ userRepository, tenantRepository, branchRepository, auditService, notificationService, createDeviceSession });
-  const refreshTokenUseCase = new RefreshToken({ userRepository, tenantRepository, branchRepository });
+  const refreshTokenUseCase = new RefreshToken({ userRepository, tenantRepository, branchRepository, deviceSessionRepository });
 
   const createBranch = new CreateBranch({ branchRepository, tenantRepository, auditService });
   const updateBranch = new UpdateBranch({ branchRepository, auditService });
@@ -231,6 +231,8 @@ export default function buildContainer(io: any) {
     getCommissionOverrideReportUC: getCommissionOverrideReport,
     getPeriodComparisonUC: getPeriodComparison,
     getPaymentMethodReportUC: getPaymentMethodReport,
+    getAllBranchDailyBalancesUC: getAllBranchDailyBalances,
+    getDailyTallyUC: getDailyTally,
   });
   const getCommissionPayables = new GetCommissionPayables({ commissionPayableRepository });
   const getCommissionSettlements = new GetCommissionSettlements({ commissionSettlementRepository });
@@ -240,7 +242,7 @@ export default function buildContainer(io: any) {
 
   const getAuditLogs = new GetAuditLogs();
   const deleteBranch = new DeleteBranch({ branchRepository, notificationService, auditService });
-  const suspendUser = new SuspendUser({ userRepository, notificationService, auditService });
+  const suspendUser = new SuspendUser({ userRepository, deviceSessionRepository, notificationService, auditService });
   const getUserActiveTransactions = new GetUserActiveTransactions({ userRepository, transactionRepository });
   const resetDevData = new ResetDevData();
   const createExternalAccount = new CreateExternalAccount();
@@ -260,7 +262,7 @@ export default function buildContainer(io: any) {
   // Controllers
   const authController = new AuthController({ loginUseCase, refreshTokenUseCase, tenantRepository });
   const branchController = new BranchController({ createBranch, updateBranch, getBranches, branchRepository, deleteBranch, getBranchLedger, getBranchDailyBalances, notificationService, auditService });
-  const userController = new UserController({ createUser, updateUser, getUsers, resetPassword, userRepository, suspendUser, getUserActiveTransactions, notificationService, auditService });
+  const userController = new UserController({ createUser, updateUser, getUsers, resetPassword, userRepository, deviceSessionRepository, suspendUser, getUserActiveTransactions, notificationService, auditService });
   const reportController = new ReportController({
     getReports,
     exportReport,

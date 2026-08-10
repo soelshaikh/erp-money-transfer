@@ -1,16 +1,19 @@
 import jwt from 'jsonwebtoken';
 import env from '../../../config/env';
-import { UnauthorizedError } from '../../../domain/errors';
+import { UnauthorizedError, DeviceNotAuthorizedError } from '../../../domain/errors';
+import { ROLES, DEVICE_STATUS } from '../../../config/constants';
 
 export default class RefreshToken {
   userRepository: any;
   tenantRepository: any;
   branchRepository: any;
+  deviceSessionRepository: any;
 
   constructor(deps: any) {
     this.userRepository = deps.userRepository;
     this.tenantRepository = deps.tenantRepository;
     this.branchRepository = deps.branchRepository;
+    this.deviceSessionRepository = deps.deviceSessionRepository || null;
   }
 
   async execute(params: any): Promise<any> {
@@ -34,6 +37,21 @@ export default class RefreshToken {
     if (user.branchId) {
       const branch = await this.branchRepository.findById(user.tenantId.toString(), user.branchId.toString());
       if (!branch || branch.status !== 'active') throw new UnauthorizedError('Branch inactive');
+    }
+
+    // Branch users with device approval enabled must have at least one approved session.
+    // If all sessions were suspended (by admin), the refresh token must be invalidated.
+    if (
+      this.deviceSessionRepository &&
+      user.role === ROLES.BRANCH &&
+      tenant.features?.deviceApprovalRequired !== false
+    ) {
+      const approved = await this.deviceSessionRepository.listByUser(
+        tenant._id.toString(),
+        user._id.toString(),
+        DEVICE_STATUS.APPROVED
+      );
+      if (approved.length === 0) throw new DeviceNotAuthorizedError();
     }
 
     const accessToken = jwt.sign(

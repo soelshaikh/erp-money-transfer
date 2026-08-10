@@ -19,6 +19,7 @@ export function LoginScreen() {
   const login = useAuthStore((s: any) => s.login);
   const setPendingDevice = useAuthStore((s: any) => s.setPendingDevice);
   const setPendingLoginParams = useAuthStore((s: any) => s.setPendingLoginParams);
+  const clearPendingDevice = useAuthStore((s: any) => s.clearPendingDevice);
   const { branchCode, clear: clearConfig, save: saveConfig } = useConfigStore();
 
   const [form, setForm] = useState<{ tenantSlug: string; username: string; password: string }>({
@@ -75,7 +76,10 @@ export function LoginScreen() {
   };
 
   const handleLogin = () => {
-    if (validate()) mutation.mutate();
+    if (!validate()) return;
+    // Clear any leftover pending state from a previous login attempt
+    clearPendingDevice();
+    mutation.mutate();
   };
 
   const handleTitleLongPress = () => {

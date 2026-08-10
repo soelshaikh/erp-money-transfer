@@ -24,6 +24,7 @@ import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
 import { withAlpha } from '../../../utils/colors';
 import { fmtDateTime } from '../../../utils/fmt';
+import type { DeviceSession } from '../../../types/deviceSession';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -35,18 +36,6 @@ interface LoginEvent {
   ipAddress: string | null;
   loginAt: string;
   employeeId?: string | null;
-}
-
-interface DeviceSession {
-  _id: string;
-  userId: { _id: string; name: string; username: string; role: string } | null;
-  deviceId: string;
-  deviceName: string;
-  platform: string;
-  ip: string | null;
-  status: string;
-  approvedAt: string | null;
-  createdAt: string;
 }
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────

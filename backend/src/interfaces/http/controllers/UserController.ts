@@ -7,17 +7,19 @@ export default class UserController {
   private getUsers: any;
   private resetPassword: any;
   private userRepository: any;
+  private deviceSessionRepository: any;
   private suspendUser_uc: any;
   private getUserActiveTransactions_uc: any;
   private notificationService: any;
   private auditService: any;
 
-  constructor({ createUser, updateUser, getUsers, resetPassword, userRepository, suspendUser, getUserActiveTransactions, notificationService, auditService }: any) {
+  constructor({ createUser, updateUser, getUsers, resetPassword, userRepository, deviceSessionRepository, suspendUser, getUserActiveTransactions, notificationService, auditService }: any) {
     this.createUser = createUser;
     this.updateUser = updateUser;
     this.getUsers = getUsers;
     this.resetPassword = resetPassword;
     this.userRepository = userRepository;
+    this.deviceSessionRepository = deviceSessionRepository;
     this.suspendUser_uc = suspendUser;
     this.getUserActiveTransactions_uc = getUserActiveTransactions;
     this.notificationService = notificationService;
@@ -102,6 +104,8 @@ export default class UserController {
     const newStatus = user.status === 'active' ? 'disabled' : 'active';
     await this.userRepository.update(req.user.tenantId, req.params.id, { status: newStatus });
     if (newStatus === 'disabled') {
+      // Suspend all active sessions — allowedDevices kept intact so re-enabling restores access
+      await this.deviceSessionRepository.suspendAllByUser(req.user.tenantId, req.params.id);
       this.notificationService.forceLogoutUser(req.user.tenantId, req.params.id).catch(() => {});
     }
     this.auditService.log({
@@ -124,16 +128,34 @@ export default class UserController {
   }
 
   async addDevice(req: any, res: any): Promise<void> {
-    await this.userRepository.addDevice(req.user.tenantId, req.params.id, {
+    const { tenantId } = req.user;
+    const userId = req.params.id;
+    await this.userRepository.addDevice(tenantId, userId, {
       deviceId: req.body.deviceId,
       deviceName: req.body.deviceName || 'Unknown Device',
       registeredAt: new Date(),
+    });
+    this.auditService.log({
+      tenantId, userId: req.user.id, actorName: req.user.name, actorUsername: req.user.username,
+      action: AUDIT_ACTIONS.CREATE, module: MODULES.DEVICE,
+      entityId: userId, after: { deviceId: req.body.deviceId, action: 'device_added' },
     });
     res.json({ success: true, data: { message: 'Device added' } });
   }
 
   async removeDevice(req: any, res: any): Promise<void> {
-    await this.userRepository.removeDevice(req.user.tenantId, req.params.id, req.params.deviceId);
+    const { tenantId } = req.user;
+    const userId = req.params.id;
+    const { deviceId } = req.params;
+    await this.userRepository.removeDevice(tenantId, userId, deviceId);
+    // Suspend any live session for this device and force-logout the user
+    await this.deviceSessionRepository.suspendByDeviceId(tenantId, userId, deviceId);
+    this.notificationService.forceLogoutUser(tenantId, userId).catch(() => {});
+    this.auditService.log({
+      tenantId, userId: req.user.id, actorName: req.user.name, actorUsername: req.user.username,
+      action: AUDIT_ACTIONS.DELETE, module: MODULES.DEVICE,
+      entityId: userId, after: { deviceId, action: 'device_removed' },
+    });
     res.json({ success: true, data: { message: 'Device removed' } });
   }
 }

@@ -8,6 +8,7 @@ import { authApi } from '../api/authApi';
 import { withAlpha } from '../../../utils/colors';
 
 const POLL_INTERVAL_MS = 10_000;
+const MAX_POLL_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 type StatusConfig = { icon: any; iconColor: string; title: string; body: string; hint: string };
 
@@ -21,6 +22,7 @@ export function PendingDeviceScreen() {
   const login = useAuthStore((s: any) => s.login);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollStartedAtRef = useRef<number>(0);
 
   const STATUS_CONFIG: Record<string, StatusConfig> = {
     pending: {
@@ -51,6 +53,13 @@ export function PendingDeviceScreen() {
       body: t('pending.blockedBody'),
       hint: t('pending.blockedHint'),
     },
+    expired: {
+      icon: 'hourglass-outline',
+      iconColor: '#6B7280',
+      title: t('pending.expiredTitle'),
+      body: t('pending.expiredBody'),
+      hint: t('pending.expiredHint'),
+    },
   };
 
   const status = pendingDeviceInfo?.deviceStatus || 'pending';
@@ -64,7 +73,15 @@ export function PendingDeviceScreen() {
   useEffect(() => {
     if (status !== 'pending' || !pendingLoginParams) return;
 
+    pollStartedAtRef.current = Date.now();
+
     const poll = async () => {
+      // Stop polling if the request has been pending too long
+      if (Date.now() - pollStartedAtRef.current > MAX_POLL_DURATION_MS) {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        setPendingDevice('expired', pendingDeviceInfo?.user, pendingDeviceInfo?.tenant);
+        return;
+      }
       try {
         const data = await authApi.login(pendingLoginParams);
         if (data.deviceStatus === 'approved' && data.accessToken) {

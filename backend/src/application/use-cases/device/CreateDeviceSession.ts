@@ -1,15 +1,19 @@
-import { DEVICE_STATUS, NOTIFICATION_TYPE, ROLES } from '../../../config/constants';
+import { DEVICE_STATUS, NOTIFICATION_TYPE, ROLES, AUDIT_ACTIONS, MODULES } from '../../../config/constants';
 
 const MAX_ATTEMPTS = 5;
 const ATTEMPT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 export default class CreateDeviceSession {
   deviceSessionRepository: any;
+  userRepository: any;
   notificationService: any;
+  auditService: any;
 
   constructor(deps: any) {
     this.deviceSessionRepository = deps.deviceSessionRepository;
+    this.userRepository = deps.userRepository || null;
     this.notificationService = deps.notificationService || null;
+    this.auditService = deps.auditService || null;
   }
 
   async execute(params: any): Promise<{ deviceStatus: string }> {
@@ -19,7 +23,7 @@ export default class CreateDeviceSession {
 
     if (!existing) {
       const initialStatus = autoApprove ? DEVICE_STATUS.APPROVED : DEVICE_STATUS.PENDING;
-      await this.deviceSessionRepository.create({
+      const created = await this.deviceSessionRepository.create({
         tenantId, userId, deviceId,
         deviceName: deviceName || 'Unknown Device',
         platform: platform || 'unknown',
@@ -28,7 +32,16 @@ export default class CreateDeviceSession {
         attemptCount: 0,
         approvedAt: autoApprove ? new Date() : null,
       });
-      if (!autoApprove) this._notify(tenantId, userId, deviceName, userName);
+      if (autoApprove) {
+        // Suspend other approved sessions and wipe refresh token — consistent with manual approval
+        await this.deviceSessionRepository.suspendAllExcept(tenantId, userId.toString(), created._id.toString());
+        if (this.userRepository) {
+          await this.userRepository.update(tenantId, userId.toString(), { refreshTokenHash: null });
+        }
+        this._auditAutoApprove(tenantId, userId, deviceName, created._id.toString());
+      } else {
+        this._notify(tenantId, userId, deviceName, userName);
+      }
       return { deviceStatus: initialStatus };
     }
 
@@ -39,6 +52,12 @@ export default class CreateDeviceSession {
         ip, userAgent,
         approvedAt: existing.approvedAt || new Date(),
       });
+      // Suspend other approved sessions and wipe refresh token — consistent with manual approval
+      await this.deviceSessionRepository.suspendAllExcept(tenantId, userId.toString(), existing._id.toString());
+      if (this.userRepository) {
+        await this.userRepository.update(tenantId, userId.toString(), { refreshTokenHash: null });
+      }
+      this._auditAutoApprove(tenantId, userId, deviceName, existing._id.toString());
       return { deviceStatus: DEVICE_STATUS.APPROVED };
     }
 
@@ -79,5 +98,17 @@ export default class CreateDeviceSession {
       body: `${userName} is requesting access from: ${deviceName || 'Unknown Device'}`,
       data: { userId: String(userId) },
     }).catch(() => {});
+  }
+
+  _auditAutoApprove(tenantId: any, userId: any, deviceName: string, sessionId: string) {
+    if (!this.auditService) return;
+    this.auditService.log({
+      tenantId,
+      userId,
+      action: AUDIT_ACTIONS.DEVICE_APPROVE,
+      module: MODULES.DEVICE,
+      entityId: sessionId,
+      after: { deviceName, autoApproved: true },
+    });
   }
 }

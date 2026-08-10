@@ -60,8 +60,9 @@ export default class MongoUserRepository extends IUserRepository {
   }
 
   async addDevice(tenantId: any, userId: any, device: any) {
+    // Only add if this deviceId is not already in the list
     await UserModel.updateOne(
-      { _id: userId, tenantId },
+      { _id: userId, tenantId, 'allowedDevices.deviceId': { $ne: device.deviceId } },
       { $push: { allowedDevices: device } }
     );
   }
@@ -82,5 +83,16 @@ export default class MongoUserRepository extends IUserRepository {
     const user = await UserModel.findOne({ _id: userId, tenantId }, { allowedDevices: 1 }).lean();
     if (!user) throw new NotFoundError('User');
     return (user as any).allowedDevices || [];
+  }
+
+  async clearAllowedDevices(tenantId: any, userId: any): Promise<void> {
+    await UserModel.updateOne(
+      { _id: userId, tenantId },
+      { $set: { allowedDevices: [] } }
+    );
+  }
+
+  async countActiveByBranch(tenantId: string, branchId: string): Promise<number> {
+    return UserModel.countDocuments({ tenantId, branchId, status: 'active' });
   }
 }

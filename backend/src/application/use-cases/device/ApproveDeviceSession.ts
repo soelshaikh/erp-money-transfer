@@ -35,6 +35,14 @@ export default class ApproveDeviceSession {
       approvedAt: new Date(),
     });
 
+    // Persist device to the user's permanent whitelist so future logins
+    // from this device are auto-approved without going through pending again
+    await this.userRepository.addDevice(
+      tenantId,
+      session.userId.toString(),
+      { deviceId: session.deviceId, deviceName: session.deviceName }
+    );
+
     // Wipe refresh token — forces all other live sessions to re-authenticate
     // When they hit /auth/refresh next time it will fail → they re-login → see suspended screen
     await this.userRepository.update(

@@ -19,22 +19,7 @@ import { EmptyState } from '../../../shared/components/EmptyState';
 import { parseApiError } from '../../../utils/apiError';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { deviceSessionApi } from '../api/deviceSessionApi';
-
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-interface DeviceSession {
-  _id: string;
-  userId: { _id: string; name: string; username: string; role: string } | null;
-  deviceId: string;
-  deviceName: string;
-  platform: string;
-  ip: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'suspended';
-  createdAt: string;
-  approvedAt: string | null;
-  rejectedAt: string | null;
-  suspendedAt: string | null;
-}
+import type { DeviceSession } from '../../../types/deviceSession';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 

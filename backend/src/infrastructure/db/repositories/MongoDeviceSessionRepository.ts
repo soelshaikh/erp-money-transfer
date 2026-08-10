@@ -62,4 +62,27 @@ export default class MongoDeviceSessionRepository {
       { $set: { status: DEVICE_STATUS.SUSPENDED, suspendedAt: new Date() } }
     );
   }
+
+  async suspendAllByUser(tenantId: string, userId: string): Promise<void> {
+    await DeviceSessionModel.updateMany(
+      {
+        tenantId: new mongoose.Types.ObjectId(tenantId),
+        userId:   new mongoose.Types.ObjectId(userId),
+        status:   DEVICE_STATUS.APPROVED,
+      },
+      { $set: { status: DEVICE_STATUS.SUSPENDED, suspendedAt: new Date() } }
+    );
+  }
+
+  async suspendByDeviceId(tenantId: string, userId: string, deviceId: string): Promise<void> {
+    await DeviceSessionModel.updateMany(
+      {
+        tenantId: new mongoose.Types.ObjectId(tenantId),
+        userId:   new mongoose.Types.ObjectId(userId),
+        deviceId,
+        status:   DEVICE_STATUS.APPROVED,
+      },
+      { $set: { status: DEVICE_STATUS.SUSPENDED, suspendedAt: new Date() } }
+    );
+  }
 }

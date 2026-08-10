@@ -4,10 +4,12 @@ import { NotFoundError } from '../../../domain/errors';
 
 export default class RejectDeviceSession {
   deviceSessionRepository: any;
+  userRepository: any;
   auditService: any;
 
   constructor(deps: any) {
     this.deviceSessionRepository = deps.deviceSessionRepository;
+    this.userRepository = deps.userRepository;
     this.auditService = deps.auditService;
   }
 
@@ -24,6 +26,9 @@ export default class RejectDeviceSession {
       rejectedBy: new mongoose.Types.ObjectId(rejectorId),
       rejectedAt: new Date(),
     });
+
+    // Remove from whitelist so next login from this device goes through pending again
+    await this.userRepository.removeDevice(tenantId, session.userId.toString(), session.deviceId).catch(() => {});
 
     this.auditService.log({
       tenantId, userId: rejectorId, actorName, actorUsername,

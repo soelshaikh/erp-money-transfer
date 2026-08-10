@@ -10,6 +10,8 @@ import GetStaffReport from './GetStaffReport';
 import GetCommissionOverrideReport from './GetCommissionOverrideReport';
 import GetPeriodComparison from './GetPeriodComparison';
 import GetPaymentMethodReport from './GetPaymentMethodReport';
+import GetAllBranchDailyBalances from './GetAllBranchDailyBalances';
+import GetDailyTally from './GetDailyTally';
 
 interface ExportResult {
   buffer: Buffer;
@@ -31,6 +33,8 @@ export default class ExportReport {
   private getCommissionOverrideReport: GetCommissionOverrideReport;
   private getPeriodComparison: GetPeriodComparison;
   private getPaymentMethodReport: GetPaymentMethodReport;
+  private getAllBranchDailyBalances: GetAllBranchDailyBalances;
+  private getDailyTally: GetDailyTally;
 
   constructor({
     transactionRepository,
@@ -46,6 +50,8 @@ export default class ExportReport {
     getCommissionOverrideReportUC,
     getPeriodComparisonUC,
     getPaymentMethodReportUC,
+    getAllBranchDailyBalancesUC,
+    getDailyTallyUC,
   }: any) {
     this.transactionRepository = transactionRepository;
     this.branchRepository = branchRepository;
@@ -60,6 +66,8 @@ export default class ExportReport {
     this.getCommissionOverrideReport = getCommissionOverrideReportUC || new GetCommissionOverrideReport({});
     this.getPeriodComparison = getPeriodComparisonUC || new GetPeriodComparison({ transactionRepository });
     this.getPaymentMethodReport = getPaymentMethodReportUC || new GetPaymentMethodReport({ transactionRepository });
+    this.getAllBranchDailyBalances = getAllBranchDailyBalancesUC || new GetAllBranchDailyBalances({ branchRepository });
+    this.getDailyTally = getDailyTallyUC || new GetDailyTally({ branchRepository });
   }
 
   async execute({
@@ -102,6 +110,7 @@ export default class ExportReport {
     switch (reportType) {
       case 'daily':
         return this.getDailyReport.execute({ tenantId, role, branchId, fromDate, toDate });
+      case 'pending':
       case 'pending-queue':
         return this.getPendingQueue.execute({ tenantId, role, branchId, limit: 5000 });
       case 'outstanding':
@@ -122,6 +131,10 @@ export default class ExportReport {
         return this.getPeriodComparison.execute({ tenantId, role, branchId, period });
       case 'payment-methods':
         return this.getPaymentMethodReport.execute({ tenantId, role, branchId, fromDate, toDate });
+      case 'all-branch-balances':
+        return this.getAllBranchDailyBalances.execute({ tenantId, fromDate, toDate });
+      case 'daily-tally':
+        return this.getDailyTally.execute({ tenantId, date });
       default:
         throw new Error(`Unknown reportType: ${reportType}`);
     }
@@ -139,6 +152,7 @@ export default class ExportReport {
           ? this._buildDailyReportCsv(data)
           : this._buildDailyReportExcel(data);
 
+      case 'pending':
       case 'pending-queue':
       case 'outstanding':
       case 'rejected':
@@ -196,6 +210,20 @@ export default class ExportReport {
           : format === 'csv'
           ? this._buildPeriodComparisonCsv(data)
           : this._buildPeriodComparisonExcel(data);
+
+      case 'all-branch-balances':
+        return format === 'pdf'
+          ? this._buildAllBranchBalancesPdf(data, filters)
+          : format === 'csv'
+          ? this._buildAllBranchBalancesCsv(data)
+          : this._buildAllBranchBalancesExcel(data);
+
+      case 'daily-tally':
+        return format === 'pdf'
+          ? this._buildDailyTallyPdf(data, filters)
+          : format === 'csv'
+          ? this._buildDailyTallyCsv(data)
+          : this._buildDailyTallyExcel(data);
 
       default:
         throw new Error(`Export not supported for reportType: ${reportType}`);
@@ -789,6 +817,136 @@ export default class ExportReport {
       rows.push(['Current', c.startDate, c.endDate, c.count, c.totalAmount, c.totalCommission, c.completedCount]);
       rows.push(['Previous', p.startDate, p.endDate, p.count, p.totalAmount, p.totalCommission, p.completedCount]);
       rows.push([`Growth %`, '', '', `${g.countPct}%`, `${g.amountPct}%`, `${g.commissionPct}%`, '']);
+      this._pdfTable(doc, cols, rows);
+      doc.end();
+    });
+  }
+
+  // =========================================================================
+  // ALL BRANCH BALANCES
+  // =========================================================================
+
+  private _buildAllBranchBalancesCsv(data: any): ExportResult {
+    const lines: string[] = [];
+    for (const d of (data.dates || [])) {
+      lines.push(`"Date","${d.date}"`);
+      const header = ['Branch', 'Code', 'Opening Balance (₹)', 'Closing Balance (₹)'];
+      lines.push(header.map((v) => `"${v}"`).join(','));
+      for (const b of (d.branches || [])) {
+        lines.push([b.branchName, b.branchCode, b.openingBalance, b.closingBalance].map((v) => `"${String(v ?? '')}"`).join(','));
+      }
+      lines.push(`"Net Closing","${d.netClosing}"`);
+      lines.push('');
+    }
+    return { buffer: Buffer.from('﻿' + lines.join('\n'), 'utf-8'), contentType: 'text/csv', filename: 'all-branch-balances.csv' };
+  }
+
+  private async _buildAllBranchBalancesExcel(data: any): Promise<ExportResult> {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    for (const d of (data.dates || [])) {
+      const ws = wb.addWorksheet(d.date);
+      ws.columns = [
+        { header: 'Branch', key: 'branch', width: 20 },
+        { header: 'Code', key: 'code', width: 10 },
+        { header: 'Opening Balance (₹)', key: 'opening', width: 20 },
+        { header: 'Closing Balance (₹)', key: 'closing', width: 20 },
+      ];
+      for (const b of (d.branches || [])) {
+        ws.addRow({ branch: b.branchName, code: b.branchCode, opening: b.openingBalance, closing: b.closingBalance });
+      }
+      ws.addRow({});
+      ws.addRow({ branch: 'Net Closing', code: '', opening: '', closing: d.netClosing });
+    }
+    if (wb.worksheets.length === 0) wb.addWorksheet('No Data');
+    const buffer = await wb.xlsx.writeBuffer();
+    return { buffer: buffer as Buffer, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', filename: 'all-branch-balances.xlsx' };
+  }
+
+  private _buildAllBranchBalancesPdf(data: any, filters: any): Promise<ExportResult> {
+    return new Promise<ExportResult>((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
+      const chunks: Buffer[] = [];
+      doc.on('data', (c: Buffer) => chunks.push(c));
+      doc.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentType: 'application/pdf', filename: 'all-branch-balances.pdf' }));
+      doc.on('error', reject);
+      this._pdfHeader(doc, 'All Branch Balances', filters);
+      const cols = [
+        { label: 'Date', width: 80 },
+        { label: 'Branch', width: 130 },
+        { label: 'Code', width: 60 },
+        { label: 'Opening (₹)', width: 110 },
+        { label: 'Closing (₹)', width: 110 },
+      ];
+      const rows: any[][] = [];
+      for (const d of (data.dates || [])) {
+        for (const b of (d.branches || [])) {
+          rows.push([d.date, b.branchName, b.branchCode, b.openingBalance, b.closingBalance]);
+        }
+        rows.push(['', 'Net Closing', '', '', d.netClosing]);
+      }
+      this._pdfTable(doc, cols, rows);
+      doc.end();
+    });
+  }
+
+  // =========================================================================
+  // DAILY TALLY
+  // =========================================================================
+
+  private _buildDailyTallyCsv(data: any): ExportResult {
+    const header = ['Branch', 'Code', 'Opening Balance (₹)', 'Closing Balance (₹)', 'Daily Change (₹)'];
+    const rows = (data.branches || []).map((b: any) => [
+      b.branchName, b.branchCode, b.openingBalance, b.closingBalance, b.dailyChange,
+    ]);
+    rows.push(['TOTAL', '', data.totalOpeningBalance, data.totalClosingBalance, data.netTotal]);
+    const csv = [header, ...rows].map((row) => row.map((v: any) => `"${String(v ?? '')}"`).join(',')).join('\n');
+    return { buffer: Buffer.from('﻿' + csv, 'utf-8'), contentType: 'text/csv', filename: `daily-tally-${data.date || 'report'}.csv` };
+  }
+
+  private async _buildDailyTallyExcel(data: any): Promise<ExportResult> {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Daily Tally');
+    ws.columns = [
+      { header: 'Branch', key: 'branch', width: 22 },
+      { header: 'Code', key: 'code', width: 10 },
+      { header: 'Opening Balance (₹)', key: 'opening', width: 20 },
+      { header: 'Closing Balance (₹)', key: 'closing', width: 20 },
+      { header: 'Daily Change (₹)', key: 'change', width: 18 },
+    ];
+    for (const b of (data.branches || [])) {
+      ws.addRow({ branch: b.branchName, code: b.branchCode, opening: b.openingBalance, closing: b.closingBalance, change: b.dailyChange });
+    }
+    ws.addRow({});
+    ws.addRow({ branch: 'TOTAL', code: '', opening: data.totalOpeningBalance, closing: data.totalClosingBalance, change: data.netTotal });
+    const buffer = await wb.xlsx.writeBuffer();
+    return { buffer: buffer as Buffer, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', filename: `daily-tally-${data.date || 'report'}.xlsx` };
+  }
+
+  private _buildDailyTallyPdf(data: any, filters: any): Promise<ExportResult> {
+    return new Promise<ExportResult>((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
+      const chunks: Buffer[] = [];
+      doc.on('data', (c: Buffer) => chunks.push(c));
+      doc.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentType: 'application/pdf', filename: `daily-tally-${data.date || 'report'}.pdf` }));
+      doc.on('error', reject);
+      this._pdfHeader(doc, `Daily Tally — ${data.date || ''}`, { ...filters, fromDate: data.date, toDate: undefined });
+      doc.fontSize(9).text(
+        `Balanced: ${data.isBalanced ? 'Yes' : 'No'} | Opening: ₹${data.totalOpeningBalance || 0} | Closing: ₹${data.totalClosingBalance || 0} | Net: ₹${data.netTotal || 0}`
+      );
+      doc.moveDown(0.5);
+      const cols = [
+        { label: 'Branch', width: 140 },
+        { label: 'Code', width: 60 },
+        { label: 'Opening (₹)', width: 110 },
+        { label: 'Closing (₹)', width: 110 },
+        { label: 'Change (₹)', width: 110 },
+      ];
+      const rows = (data.branches || []).map((b: any) => [
+        b.branchName, b.branchCode, b.openingBalance, b.closingBalance, b.dailyChange,
+      ]);
+      rows.push(['TOTAL', '', data.totalOpeningBalance, data.totalClosingBalance, data.netTotal]);
       this._pdfTable(doc, cols, rows);
       doc.end();
     });

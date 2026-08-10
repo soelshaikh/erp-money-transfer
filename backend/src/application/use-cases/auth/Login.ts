@@ -61,6 +61,16 @@ export default class Login {
       const deviceApprovalRequired =
         user.role === ROLES.BRANCH &&
         tenant.features?.deviceApprovalRequired !== false;
+
+      // If device approval is required, check the permanent whitelist first.
+      // A whitelisted device was previously approved by head office and skips
+      // the pending flow entirely — no need for re-approval on every login.
+      let isWhitelisted = false;
+      if (deviceApprovalRequired) {
+        const allowedDevices = await this.userRepository.getDevices(tenant._id, user._id).catch(() => []);
+        isWhitelisted = allowedDevices.some((d: any) => d.deviceId === params.deviceId);
+      }
+
       const { deviceStatus } = await this.createDeviceSession.execute({
         tenantId:    tenant._id,
         userId:      user._id,
@@ -70,7 +80,7 @@ export default class Login {
         ip:          params.ip,
         userAgent:   params.userAgent,
         userName:    user.name,
-        autoApprove: !deviceApprovalRequired,
+        autoApprove: !deviceApprovalRequired || isWhitelisted,
       });
 
       // Only block login access when deviceApprovalRequired is ON and device is not yet approved

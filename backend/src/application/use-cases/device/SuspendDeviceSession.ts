@@ -37,11 +37,18 @@ export default class SuspendDeviceSession {
       suspendedAt: new Date(),
     });
 
+    const userId = session.userId?._id?.toString() || session.userId?.toString();
+
     // Wipe refresh token and immediately force-logout via socket
     if (session.status === DEVICE_STATUS.APPROVED) {
-      const userId = session.userId?._id?.toString() || session.userId?.toString();
       await this.userRepository.update(tenantId, userId, { refreshTokenHash: null });
       this.notificationService.forceLogoutUser(tenantId, userId).catch(() => {});
+    }
+
+    // Admin-initiated suspend: remove device from whitelist so next login requires re-approval
+    // Self sign-out (ownerId set) does NOT clear the whitelist — user should be able to log back in
+    if (!ownerId) {
+      await this.userRepository.removeDevice(tenantId, userId, session.deviceId).catch(() => {});
     }
 
     this.auditService.log({

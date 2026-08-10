@@ -39,10 +39,16 @@ export default class SuspendAllSessions {
       })
     );
 
-    // Force-logout all affected users via socket (fire-and-forget)
-    affectedUserIds.forEach((uid) => {
-      this.notificationService.forceLogoutUser(tenantId, uid).catch(() => {});
-    });
+    // Force-logout all affected users via socket and clear their device whitelists
+    // so next login requires re-approval instead of auto-approving from the old whitelist
+    await Promise.all(
+      [...affectedUserIds].map((uid) =>
+        Promise.all([
+          this.notificationService.forceLogoutUser(tenantId, uid).catch(() => {}),
+          this.userRepository.clearAllowedDevices(tenantId, uid).catch(() => {}),
+        ])
+      )
+    );
 
     this.auditService.log({
       tenantId,
