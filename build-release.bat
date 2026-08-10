@@ -3,7 +3,7 @@ setlocal
 
 echo.
 echo ================================================
-echo   ERP Money Transfer — Release APK Builder
+echo   ERP Money Transfer -- Release APK Builder
 echo ================================================
 echo.
 
@@ -13,6 +13,19 @@ if errorlevel 1 (
   echo ERROR: Could not find mobile directory.
   pause & exit /b 1
 )
+
+:: ── Kill Gradle daemons (release lock on android folder) ──
+echo [0/3] Stopping Gradle daemons ...
+if exist "android\gradlew.bat" (
+  cd android
+  call gradlew.bat --stop >nul 2>&1
+  cd ..
+)
+:: Also kill any java processes holding the lock
+taskkill /F /IM java.exe >nul 2>&1
+taskkill /F /IM javaw.exe >nul 2>&1
+echo Done.
+echo.
 
 :: ── Prebuild (clean) ──────────────────────────────
 echo [1/3] Running expo prebuild --clean ...
