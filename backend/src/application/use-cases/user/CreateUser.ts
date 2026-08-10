@@ -63,7 +63,7 @@ export default class CreateUser {
       tenantId, username: username.toLowerCase(), passwordHash, role,
       branchId: needsBranch ? branchId : null,
       name, loginAllowedFrom, loginAllowedTo, createdBy, employeeId,
-      status: 'disabled',
+      status: role === ROLES.HEAD_OFFICE ? 'active' : 'disabled',
     });
 
     const { passwordHash: _, ...safeUser } = user;

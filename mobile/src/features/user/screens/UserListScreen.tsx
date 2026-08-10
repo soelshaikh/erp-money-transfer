@@ -81,8 +81,8 @@ function UserItem({ item, theme, onToggle, onSuspend, onManageDevices, onToggleC
           <Ionicons name="phone-portrait-outline" size={18} color={theme.colors.primary} />
         </TouchableOpacity>
 
-        {/* Disable / Enable — only for non-suspended, non-head_office */}
-        {!isSuspended && item.role !== 'head_office' && (
+        {/* Disable / Enable */}
+        {!isSuspended && (
           <TouchableOpacity onPress={() => onToggle(item)} style={{ padding: theme.spacing.sm }} disabled={disablingId === item._id}>
             {disablingId === item._id && isActive
               ? <ActivityIndicator size="small" color={theme.colors.statusPending} />
