@@ -20,15 +20,17 @@ export default class ExternalAccountController {
   }
 
   async create(req: any, res: any) {
-    const { tenantId, id: createdBy, name: actorName } = req.user;
+    const { tenantId, id: createdBy } = req.user;
     const result = await this.createExternalAccount.execute({ tenantId, createdBy, ...req.body });
     res.status(201).json({ success: true, data: result });
   }
 
   async list(req: any, res: any) {
-    const { tenantId } = req.user;
-    const { status } = req.query;
-    const result = await this.getExternalAccounts.execute({ tenantId, status });
+    const { tenantId, role, branchId: userBranchId } = req.user;
+    const { status, branchId: queryBranchId } = req.query;
+    // Branch users see only their own branch's partners
+    const branchId = role === 'branch' ? userBranchId : (queryBranchId || undefined);
+    const result = await this.getExternalAccounts.execute({ tenantId, status, branchId });
     res.status(200).json({ success: true, data: result });
   }
 

@@ -378,6 +378,59 @@ function SessionCard({
           )}
         </TouchableOpacity>
       )}
+
+      {item.status === 'suspended' && (
+        <TouchableOpacity
+          onPress={() => onApprove(item._id)}
+          disabled={isLoading}
+          style={{
+            marginTop: theme.spacing.sm,
+            backgroundColor: theme.colors.success,
+            borderRadius: theme.borderRadius.sm,
+            paddingVertical: 9,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {isLoading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text
+              style={[theme.typography.caption, { color: '#fff', fontWeight: '600' }]}
+              allowFontScaling={false}
+            >
+              Unsuspend
+            </Text>
+          )}
+        </TouchableOpacity>
+      )}
+
+      {item.status === 'rejected' && (
+        <TouchableOpacity
+          onPress={() => onApprove(item._id)}
+          disabled={isLoading}
+          style={{
+            marginTop: theme.spacing.sm,
+            borderWidth: 1,
+            borderColor: theme.colors.primary,
+            borderRadius: theme.borderRadius.sm,
+            paddingVertical: 9,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {isLoading ? (
+            <ActivityIndicator size="small" color={theme.colors.primary} />
+          ) : (
+            <Text
+              style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '600' }]}
+              allowFontScaling={false}
+            >
+              Re-approve
+            </Text>
+          )}
+        </TouchableOpacity>
+      )}
     </AppCard>
   );
 }

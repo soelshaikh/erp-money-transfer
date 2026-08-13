@@ -45,18 +45,17 @@ export default class CreateDeviceSession {
       return { deviceStatus: initialStatus };
     }
 
-    // For auto-approved tenants: always keep session approved and refresh IP
+    // For auto-approved tenants: always keep session approved and refresh IP.
+    // Do NOT call suspendAllExcept here — that would suspend every other whitelisted
+    // device on every re-login, creating an endless suspension cycle. suspendAllExcept
+    // is only appropriate when a brand-new device is first approved (below) or when
+    // an admin explicitly approves one device from the DeviceApprovals screen.
     if (autoApprove) {
       await this.deviceSessionRepository.update(existing._id.toString(), {
         status: DEVICE_STATUS.APPROVED,
         ip, userAgent,
         approvedAt: existing.approvedAt || new Date(),
       });
-      // Suspend other approved sessions and wipe refresh token — consistent with manual approval
-      await this.deviceSessionRepository.suspendAllExcept(tenantId, userId.toString(), existing._id.toString());
-      if (this.userRepository) {
-        await this.userRepository.update(tenantId, userId.toString(), { refreshTokenHash: null });
-      }
       this._auditAutoApprove(tenantId, userId, deviceName, existing._id.toString());
       return { deviceStatus: DEVICE_STATUS.APPROVED };
     }

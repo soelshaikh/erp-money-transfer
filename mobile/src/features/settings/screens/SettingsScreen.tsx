@@ -36,6 +36,7 @@ export function SettingsScreen() {
   const { user, tenant, logout } = useAuthStore();
   const { lang, setLang } = useLangStore();
   const isHeadOffice = (user as any)?.role === 'head_office';
+  const isBranch = (user as any)?.role === 'branch';
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -191,6 +192,30 @@ export function SettingsScreen() {
               </View>
             </>
           )}
+        </AppCard>
+      )}
+
+      {/* HQ Commission — branch users only */}
+      {isBranch && (
+        <AppCard style={{ marginBottom: theme.spacing.md }}>
+          <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm }]}>
+            COMMISSION
+          </Text>
+          <View style={{ height: 1, backgroundColor: theme.colors.divider }} />
+          <TouchableOpacity
+            onPress={() => navigation.navigate('HQCommissionItems')}
+            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: theme.spacing.md, gap: theme.spacing.sm }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="cash-outline" size={20} color={theme.colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[theme.typography.label, { color: theme.colors.text }]}>HQ Commission</Text>
+              <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}>
+                Settle commission owed to head office
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
+          </TouchableOpacity>
         </AppCard>
       )}
 

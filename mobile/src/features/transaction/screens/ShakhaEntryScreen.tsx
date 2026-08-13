@@ -25,6 +25,7 @@ import { fmtAmt } from '../../../utils/fmt';
 import { todayIST } from '../../../utils/dateIST';
 import { ImagePickerButton } from '../../../shared/components/ImagePickerButton';
 import { settingsApi } from '../../settings/api/settingsApi';
+import { externalAccountApi } from '../../branch/api/externalAccountApi';
 
 const PAYMENT_METHODS = [
   { value: 'cash',         label: 'Cash' },
@@ -119,14 +120,16 @@ export function ShakhaEntryScreen({ navigation }: Props) {
   const [payoutBranchId, setPayoutBranchId] = useState<string | null>(null);
   const [mokalnarName, setMokalnarName] = useState('');
   const [mokalnarMobile, setMokalnarMobile] = useState('');
-  const [commissionSide, setCommissionSide] = useState<'collection' | 'payout'>('collection');
+  const [commissionSide, setCommissionSide] = useState<'collection' | 'payout' | 'payout_extra'>('collection');
   const [overrideCommission, setOverrideCommission] = useState(false);
   const [commissionType, setCommissionType] = useState<'flat' | 'percentage'>('flat');
   const [commissionValue, setCommissionValue] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [collectionPhotoUrl, setCollectionPhotoUrl] = useState<string | null>(null);
   const [customerTokenNo, setCustomerTokenNo] = useState('');
+  const [externalAccountId, setExternalAccountId] = useState<string | null>(null);
   const [showMukabam, setShowMukabam] = useState(false);
+  const [showPartnerModal, setShowPartnerModal] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // keyboard refs
@@ -149,10 +152,17 @@ export function ShakhaEntryScreen({ navigation }: Props) {
     queryFn: settingsApi.get,
     staleTime: 300_000,
   });
+  const { data: partnersData } = useQuery({
+    queryKey: ['external-accounts', 'active'],
+    queryFn: () => externalAccountApi.list('active'),
+    staleTime: 60_000,
+  });
   const allBranches: any[] = (branchesData as any) || [];
   const myBranch = allBranches.find((b: any) => b._id === user?.branchId);
   const payoutBranches = allBranches.filter((b: any) => b._id !== user?.branchId);
   const selectedBranch = payoutBranches.find((b: any) => b._id === payoutBranchId);
+  const myPartners: any[] = (partnersData as any) || [];
+  const selectedPartner = myPartners.find((p: any) => p._id === externalAccountId) || null;
 
   // today's entries
   const { data: todayRaw, refetch: refetchToday } = useQuery({
@@ -197,6 +207,7 @@ export function ShakhaEntryScreen({ navigation }: Props) {
     setPaymentMethod('cash');
     setCollectionPhotoUrl(null);
     setCustomerTokenNo('');
+    setExternalAccountId(null);
     setErrors({});
   }, []);
 
@@ -237,6 +248,7 @@ export function ShakhaEntryScreen({ navigation }: Props) {
           ...(canOverride && overrideCommission && {
             commissionOverride: { type: commissionType, value: parseFloat(commissionValue) || 0 },
           }),
+          ...(externalAccountId && { externalAccountId }),
         },
         idempotencyKey,
       );
@@ -310,8 +322,9 @@ export function ShakhaEntryScreen({ navigation }: Props) {
             </Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {([
-                { value: 'collection', label: t('txn.senderPays'), sub: t('txn.senderPaysSub') },
-                { value: 'payout',     label: t('txn.receiverPays'), sub: t('txn.receiverPaysSub') },
+                { value: 'collection',   label: t('txn.senderPays'),        sub: t('txn.senderPaysSub') },
+                { value: 'payout',       label: t('txn.receiverPays'),      sub: t('txn.receiverPaysSub') },
+                { value: 'payout_extra', label: t('txn.receiverPaysExtra'), sub: t('txn.receiverPaysExtraSub') },
               ] as const).map((opt) => {
                 const sel = commissionSide === opt.value;
                 return (
@@ -364,6 +377,41 @@ export function ShakhaEntryScreen({ navigation }: Props) {
               <Text style={{ fontSize: 11, color: theme.colors.error, marginTop: 3 }}>{errors.mukbam}</Text>
             )}
           </View>
+
+          {/* Partner dropdown — only shown if branch has active partners */}
+          {myPartners.length > 0 && (
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 4 }}>
+                Partner (Optional)
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowPartnerModal(true)}
+                activeOpacity={0.7}
+                style={{
+                  flexDirection: 'row', alignItems: 'center',
+                  borderWidth: 1, borderColor: theme.colors.border,
+                  borderRadius: 8, paddingHorizontal: 10, paddingVertical: 12,
+                  backgroundColor: theme.colors.surface, gap: 8,
+                }}
+              >
+                <Ionicons name="people-outline" size={15} color={theme.colors.primary} />
+                <Text style={{ flex: 1, color: selectedPartner ? theme.colors.text : theme.colors.textSecondary, fontSize: 14 }}>
+                  {selectedPartner
+                    ? `${selectedPartner.code} — ${selectedPartner.name}`
+                    : '— None —'}
+                </Text>
+                {selectedPartner && (() => {
+                  const avail = (selectedPartner.balance ?? 0) - (selectedPartner.onHold ?? 0);
+                  return (
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: avail <= 0 ? theme.colors.error : theme.colors.success }} allowFontScaling={false}>
+                      {fmtAmt(Math.max(0, avail))}
+                    </Text>
+                  );
+                })()}
+                <Ionicons name="chevron-down" size={15} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Commission override — inline, before preview */}
           {canOverride && (
@@ -449,14 +497,15 @@ export function ShakhaEntryScreen({ navigation }: Props) {
             const parsedAmt = parseFloat(amount) || 0;
             if (parsedAmt <= 0 || !payoutBranchId) return null;
             const globalComm = (settingsData as any)?.settings?.commission || {};
-            const sourceBranch = commissionSide === 'payout' ? selectedBranch : myBranch;
+            const isPayoutSide = commissionSide === 'payout' || commissionSide === 'payout_extra';
+            const sourceBranch = isPayoutSide ? selectedBranch : myBranch;
             const isOverrideActive = overrideCommission && canOverride && !!commissionValue;
             const isBranchConfig = !isOverrideActive && !!sourceBranch?.commissionConfig?.enabled;
             const cType = isOverrideActive ? commissionType : (isBranchConfig ? sourceBranch.commissionConfig.type : (globalComm.type || 'flat'));
             const cValue = isOverrideActive ? (parseFloat(commissionValue) || 0) : (isBranchConfig ? sourceBranch.commissionConfig.value : (globalComm.value || 0));
             const cAmount = cType === 'percentage' ? Math.round(parsedAmt * cValue / 100) : cValue;
             const senderPays = commissionSide === 'collection' ? parsedAmt + cAmount : parsedAmt;
-            const receiverGets = commissionSide === 'collection' ? parsedAmt : parsedAmt - cAmount;
+            const receiverGets = commissionSide === 'payout' ? parsedAmt - cAmount : parsedAmt;
             const accentColor = isOverrideActive ? '#7c3aed' : (isBranchConfig ? '#d97706' : theme.colors.primary);
             const badgeText = isOverrideActive ? 'OVERRIDE' : (isBranchConfig ? 'BRANCH' : 'GLOBAL');
             const rateLabel = isOverrideActive
@@ -483,7 +532,9 @@ export function ShakhaEntryScreen({ navigation }: Props) {
                     <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.text }} allowFontScaling={false}>₹{senderPays.toLocaleString('en-IN')}</Text>
                   </View>
                   <View>
-                    <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>Commission</Text>
+                    <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>
+                      {commissionSide === 'payout_extra' ? 'Extra (receiver)' : 'Commission'}
+                    </Text>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: accentColor }} allowFontScaling={false}>₹{cAmount.toLocaleString('en-IN')}</Text>
                   </View>
                   <View>
@@ -733,9 +784,21 @@ export function ShakhaEntryScreen({ navigation }: Props) {
                 <Text style={{ flex: 0.4, fontSize: 10, color: theme.colors.textSecondary, textAlign: 'center' }} allowFontScaling={false}>
                   {i + 1}
                 </Text>
-                <Text style={{ flex: 1.1, fontSize: 10, color: theme.colors.primary, fontWeight: '700', textAlign: 'center' }} allowFontScaling={false}>
-                  {fmtAmt(Number(tx.amount || 0))}
-                </Text>
+                <View style={{ flex: 1.1, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 10, color: theme.colors.primary, fontWeight: '700' }} allowFontScaling={false}>
+                    {fmtAmt(Number(tx.amount || 0))}
+                  </Text>
+                  {!!tx.tokenNumber && (
+                    <Text style={{ fontSize: 8, color: theme.colors.textSecondary, marginTop: 1 }} numberOfLines={1} allowFontScaling={false}>
+                      {tx.tokenNumber}
+                    </Text>
+                  )}
+                  {!!tx.customerTokenNo && (
+                    <Text style={{ fontSize: 9, color: theme.colors.textSecondary, marginTop: 1 }} numberOfLines={1} allowFontScaling={false}>
+                      {tx.customerTokenNo}
+                    </Text>
+                  )}
+                </View>
                 <Text style={{ flex: 1.4, fontSize: 10, color: theme.colors.text, textAlign: 'center' }} numberOfLines={1} allowFontScaling={false}>
                   {extractLenar(tx.remarks)}
                 </Text>
@@ -830,6 +893,96 @@ export function ShakhaEntryScreen({ navigation }: Props) {
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontWeight: '600', color: theme.colors.text, fontSize: 14 }}>{item.name}</Text>
                       <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>{item.code}</Text>
+                    </View>
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Partner picker modal ─────────────────────────── */}
+      <Modal
+        visible={showPartnerModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowPartnerModal(false)}
+      >
+        <View style={{ flex: 1 }}>
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
+            activeOpacity={1}
+            onPress={() => setShowPartnerModal(false)}
+          />
+          <View style={{
+            backgroundColor: theme.colors.surface,
+            borderTopLeftRadius: 16,
+            borderTopRightRadius: 16,
+            maxHeight: '55%',
+          }}>
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.colors.border,
+            }}>
+              <Text style={{ fontWeight: '700', fontSize: 16, color: theme.colors.text }}>
+                Select Partner
+              </Text>
+              <TouchableOpacity onPress={() => setShowPartnerModal(false)} activeOpacity={0.7}>
+                <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={[{ _id: null, code: '—', name: 'None', balance: 0, onHold: 0 }, ...myPartners]}
+              keyExtractor={(item: any) => item._id ?? 'none'}
+              removeClippedSubviews
+              maxToRenderPerBatch={10}
+              windowSize={5}
+              initialNumToRender={10}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }: { item: any }) => {
+                const isNone = item._id === null;
+                const isSelected = isNone ? !externalAccountId : externalAccountId === item._id;
+                const avail = isNone ? 0 : (item.balance ?? 0) - (item.onHold ?? 0);
+                return (
+                  <TouchableOpacity
+                    onPress={() => { setExternalAccountId(isNone ? null : item._id); setShowPartnerModal(false); }}
+                    activeOpacity={0.7}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 16,
+                      paddingVertical: 13,
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.colors.border,
+                      backgroundColor: isSelected ? withAlpha(theme.colors.primary, 0.08) : 'transparent',
+                      gap: 12,
+                    }}
+                  >
+                    <View style={{
+                      width: 40, height: 40, borderRadius: 20,
+                      backgroundColor: withAlpha(theme.colors.primary, 0.12),
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Text style={{ fontWeight: '700', color: theme.colors.primary, fontSize: 11 }} allowFontScaling={false}>
+                        {item.code}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontWeight: '600', color: theme.colors.text, fontSize: 14 }}>{item.name}</Text>
+                      {!isNone && (
+                        <Text style={{ fontSize: 12, color: avail <= 0 ? theme.colors.error : theme.colors.success, fontWeight: '600' }} allowFontScaling={false}>
+                          {fmtAmt(Math.max(0, avail))} avail
+                        </Text>
+                      )}
                     </View>
                     {isSelected && (
                       <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />

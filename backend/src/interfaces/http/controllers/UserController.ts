@@ -9,11 +9,12 @@ export default class UserController {
   private userRepository: any;
   private deviceSessionRepository: any;
   private suspendUser_uc: any;
+  private unsuspendUser_uc: any;
   private getUserActiveTransactions_uc: any;
   private notificationService: any;
   private auditService: any;
 
-  constructor({ createUser, updateUser, getUsers, resetPassword, userRepository, deviceSessionRepository, suspendUser, getUserActiveTransactions, notificationService, auditService }: any) {
+  constructor({ createUser, updateUser, getUsers, resetPassword, userRepository, deviceSessionRepository, suspendUser, unsuspendUser, getUserActiveTransactions, notificationService, auditService }: any) {
     this.createUser = createUser;
     this.updateUser = updateUser;
     this.getUsers = getUsers;
@@ -21,6 +22,7 @@ export default class UserController {
     this.userRepository = userRepository;
     this.deviceSessionRepository = deviceSessionRepository;
     this.suspendUser_uc = suspendUser;
+    this.unsuspendUser_uc = unsuspendUser;
     this.getUserActiveTransactions_uc = getUserActiveTransactions;
     this.notificationService = notificationService;
     this.auditService = auditService;
@@ -30,6 +32,7 @@ export default class UserController {
     this.getOne = this.getOne.bind(this);
     this.resetPwd = this.resetPwd.bind(this);
     this.suspendUser = this.suspendUser.bind(this);
+    this.unsuspendUser = this.unsuspendUser.bind(this);
     this.getActiveTransactions = this.getActiveTransactions.bind(this);
     this.listDevices = this.listDevices.bind(this);
     this.addDevice = this.addDevice.bind(this);
@@ -90,6 +93,17 @@ export default class UserController {
       tenantId: req.user.tenantId,
       userId: req.params.id,
       suspendedBy: req.user.id,
+      actorName: req.user.name,
+      actorUsername: req.user.username,
+    });
+    res.json({ success: true, data: result });
+  }
+
+  async unsuspendUser(req: any, res: any): Promise<void> {
+    const result = await this.unsuspendUser_uc.execute({
+      tenantId: req.user.tenantId,
+      userId: req.params.id,
+      unsuspendedBy: req.user.id,
       actorName: req.user.name,
       actorUsername: req.user.username,
     });

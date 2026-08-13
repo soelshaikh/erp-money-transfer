@@ -48,7 +48,7 @@ export default class MongoUserRepository extends IUserRepository {
     if (status) query.status = status;
     const skip = (page - 1) * limit;
     const [data, total] = await Promise.all([
-      UserModel.find(query).skip(skip).limit(limit).lean(),
+      UserModel.find(query).skip(skip).limit(limit).populate('branchId', 'name code').lean(),
       UserModel.countDocuments(query),
     ]);
     return { data, total, page, limit };

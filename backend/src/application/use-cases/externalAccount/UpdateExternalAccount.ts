@@ -6,7 +6,7 @@ export default class UpdateExternalAccount {
     const account = await ExternalAccountModel.findOne({ _id: accountId, tenantId });
     if (!account) throw new NotFoundError('Partner account not found');
 
-    const allowed = ['name', 'contactPerson', 'phone', 'address', 'notes', 'status'];
+    const allowed = ['name', 'contactPerson', 'phone', 'address', 'notes', 'status', 'branchId'];
     for (const key of allowed) {
       if (updates[key] !== undefined) {
         (account as any)[key] = typeof updates[key] === 'string' ? updates[key].trim() : updates[key];

@@ -1,10 +1,10 @@
 import { apiClient } from '../../../api/client';
 
 export const externalAccountApi = {
-  list: (status?: string) =>
-    apiClient.get('/external-accounts', { params: status ? { status } : {} }).then((r) => r.data.data),
+  list: (status?: string, branchId?: string) =>
+    apiClient.get('/external-accounts', { params: { ...(status ? { status } : {}), ...(branchId ? { branchId } : {}) } }).then((r) => r.data.data),
 
-  create: (body: { name: string; code: string; contactPerson?: string; phone?: string; address?: string; notes?: string }) =>
+  create: (body: { branchId: string; name: string; code: string; contactPerson?: string; phone?: string; address?: string; notes?: string }) =>
     apiClient.post('/external-accounts', body).then((r) => r.data.data),
 
   update: (id: string, body: any) =>

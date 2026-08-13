@@ -17,6 +17,7 @@ import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
 import { withAlpha } from '../../../utils/colors';
 import { fmtAmt, fmtAmtSigned } from '../../../utils/fmt';
+import { hqCommissionApi } from '../../hqCommission/api/hqCommissionApi';
 
 interface RecentTxnTableProps {
   transactions: any[];
@@ -256,6 +257,15 @@ export function DashboardScreen() {
   });
   const recentTxns: any[] = (recentTxnData as any)?.data ?? [];
 
+  const isBranchUser = user?.role === 'branch';
+  const isHOUser = user?.role === 'head_office';
+  const { data: hqPendingItems = [] } = useQuery({
+    queryKey: ['hqCommissionItems'],
+    queryFn: () => hqCommissionApi.listItems(),
+    enabled: isBranchUser || isHOUser,
+  });
+  const hqPendingCount = (hqPendingItems as any[]).length;
+
   if (isLoading) return <LoadingScreen message={t('dash.loading')} />;
 
   const today = (data as any)?.today;
@@ -352,9 +362,72 @@ export function DashboardScreen() {
                   )}
                 </View>
               )}
+              {hqPendingCount > 0 && (
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  style={{ marginTop: theme.spacing.sm, paddingTop: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.divider, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}
+                  onPress={() => navigation.navigate('HQCommissionItems')}
+                >
+                  <View style={{ flex: 1, backgroundColor: withAlpha(theme.colors.error, 0.08), borderRadius: theme.borderRadius.sm, padding: theme.spacing.sm, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
+                    <Ionicons name="cash-outline" size={14} color={theme.colors.error} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[theme.typography.caption, { color: theme.colors.error, fontWeight: '600' }]}>
+                        {t('hqComm.pendingItems')}
+                      </Text>
+                    </View>
+                    <Text style={[theme.typography.label, { color: theme.colors.error, fontWeight: '700' }]} allowFontScaling={false}>
+                      {hqPendingCount}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={12} color={theme.colors.error} />
+                  </View>
+                </TouchableOpacity>
+              )}
             </AppCard>
           );
         })()}
+
+        {/* Partner balances — shown separately below branch balance */}
+        {user?.role === 'branch' && ((data as any)?.partners?.length ?? 0) > 0 && (
+          <AppCard style={{ marginBottom: theme.spacing.lg }}>
+            <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm, fontWeight: '600' }]}>
+              PARTNER BALANCES
+            </Text>
+            {((data as any).partners as any[]).map((p: any, idx: number) => {
+              const bal = p.balance ?? 0;
+              const held = p.onHold ?? 0;
+              const avail = bal - held;
+              const isNeg = bal < 0;
+              const balColor = isNeg ? theme.colors.error : bal === 0 ? theme.colors.textSecondary : theme.colors.success;
+              const isLast = idx === (data as any).partners.length - 1;
+              return (
+                <View
+                  key={p._id}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: theme.spacing.xs + 2, borderBottomWidth: isLast ? 0 : 1, borderBottomColor: theme.colors.border }}
+                >
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: withAlpha(theme.colors.primary, 0.1), alignItems: 'center', justifyContent: 'center', marginRight: theme.spacing.sm }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: theme.colors.primary }} allowFontScaling={false}>{p.code}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[theme.typography.body, { color: theme.colors.text, fontWeight: '600' }]} numberOfLines={1}>{p.name}</Text>
+                    {held > 0 && (
+                      <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]} allowFontScaling={false}>
+                        {fmtAmt(held)} on hold · avail {fmtAmt(Math.max(0, avail))}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontSize: 9, color: theme.colors.textSecondary, fontWeight: '600' }}>
+                      {isNeg ? 'OWES US' : bal === 0 ? 'NIL' : 'CREDIT'}
+                    </Text>
+                    <Text style={{ color: balColor, fontWeight: '700', fontSize: 14 }} allowFontScaling={false}>
+                      {fmtAmt(Math.abs(bal))}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </AppCard>
+        )}
 
         <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm }]}>
           {formatDateLabel(fromDate, toDate, t('dash.today')).toUpperCase()}
@@ -402,6 +475,29 @@ export function DashboardScreen() {
               </View>
             ))}
           </AppCard>
+        )}
+
+        {isHOUser && hqPendingCount > 0 && (
+          <TouchableOpacity
+            activeOpacity={0.75}
+            onPress={() => navigation.navigate('HQCommissionItems')}
+            style={{ marginTop: theme.spacing.md }}
+          >
+            <AppCard style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: withAlpha(theme.colors.error, 0.12), alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="cash-outline" size={18} color={theme.colors.error} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[theme.typography.label, { color: theme.colors.error, fontWeight: '700' }]}>
+                  {t('hqComm.pendingItems')}
+                </Text>
+                <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+                  {hqPendingCount} {t('hqComm.items')} {t('hqComm.awaitingSettlement')}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
+            </AppCard>
+          </TouchableOpacity>
         )}
       </ScrollView>
 

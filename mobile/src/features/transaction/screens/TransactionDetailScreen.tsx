@@ -68,6 +68,8 @@ export function TransactionDetailScreen({ route, navigation }: Props) {
     qc.invalidateQueries({ queryKey: ['transaction', transactionId] });
     qc.invalidateQueries({ queryKey: ['transactions'] });
     qc.invalidateQueries({ queryKey: ['dashboard'] });
+    qc.invalidateQueries({ queryKey: ['external-ledger'] });
+    qc.invalidateQueries({ queryKey: ['external-accounts'] });
   };
 
   const approveMutation = useMutation({
@@ -138,9 +140,11 @@ export function TransactionDetailScreen({ route, navigation }: Props) {
         <Text style={[theme.typography.bodySmall, { color: theme.colors.textSecondary, marginTop: 4 }]}>
           {(tx as any).commissionSide === 'payout'
             ? `Sender gives ${fmtAmt(Number((tx as any).amount))} · Receiver gets ${fmtAmt(Number((tx as any).finalAmount))} · Commission ${fmtAmt(Number((tx as any).commissionAmount))} → Payout branch`
-            : `Sender gives ${fmtAmt(Number((tx as any).amount) + Number((tx as any).commissionAmount))} · Receiver gets ${fmtAmt(Number((tx as any).amount))} · Commission ${fmtAmt(Number((tx as any).commissionAmount))} → Collection branch`}
+            : (tx as any).commissionSide === 'payout_extra'
+              ? `Sender gives ${fmtAmt(Number((tx as any).amount))} · Receiver gets ${fmtAmt(Number((tx as any).amount))} · Receiver pays ${fmtAmt(Number((tx as any).commissionAmount))} → Payout branch`
+              : `Sender gives ${fmtAmt(Number((tx as any).amount) + Number((tx as any).commissionAmount))} · Receiver gets ${fmtAmt(Number((tx as any).amount))} · Commission ${fmtAmt(Number((tx as any).commissionAmount))} → Collection branch`}
         </Text>
-        {/* Collect from sender callout — shown for collection-side commission */}
+        {/* Collect from sender callout — collection side */}
         {(tx as any).commissionSide === 'collection' && Number((tx as any).commissionAmount) > 0 && (
           <View style={{
             marginTop: theme.spacing.sm,
@@ -162,6 +166,28 @@ export function TransactionDetailScreen({ route, navigation }: Props) {
             </Text>
           </View>
         )}
+        {/* Collect from receiver callout — payout_extra side */}
+        {(tx as any).commissionSide === 'payout_extra' && Number((tx as any).commissionAmount) > 0 && (
+          <View style={{
+            marginTop: theme.spacing.sm,
+            backgroundColor: withAlpha(theme.colors.warning, 0.08),
+            borderRadius: theme.borderRadius.sm,
+            paddingHorizontal: 10,
+            paddingVertical: 8,
+            borderLeftWidth: 3,
+            borderLeftColor: theme.colors.warning,
+          }}>
+            <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, fontSize: 10 }]}>
+              {t('txn.collectFromReceiver')}
+            </Text>
+            <Text style={[theme.typography.h3, { color: theme.colors.warning }]} allowFontScaling={false}>
+              {fmtAmt(Number((tx as any).commissionAmount))}
+            </Text>
+            <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+              Receiver pays commission to payout branch
+            </Text>
+          </View>
+        )}
         <View style={{ marginTop: theme.spacing.sm }}>
           <StatusBadge status={(tx as any).paymentStatus} />
         </View>
@@ -170,19 +196,47 @@ export function TransactionDetailScreen({ route, navigation }: Props) {
       {/* Details */}
       <AppCard style={{ marginBottom: theme.spacing.md }}>
         <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm }]}>{t('txn.transferDetails')}</Text>
+        <InfoRow label={t('txn.tokenLabel')} value={(tx as any).tokenNumber} theme={theme} />
+        <Divider theme={theme} />
         <InfoRow label={t('txn.collectionBranch')} value={(tx as any).collectionBranchId?.name} theme={theme} />
         <Divider theme={theme} />
         <InfoRow label={t('txn.payoutBranch')} value={(tx as any).payoutBranchId?.name} theme={theme} />
+        {(tx as any).externalAccountId && (
+          <>
+            <Divider theme={theme} />
+            <InfoRow
+              label={t('txn.partnerAccount')}
+              value={`${(tx as any).externalAccountId?.name || ''}${(tx as any).externalAccountId?.code ? ` (${(tx as any).externalAccountId.code})` : ''}`}
+              theme={theme}
+            />
+            {(tx as any).partnerCoveredAmount > 0 && (
+              <>
+                <Divider theme={theme} />
+                <InfoRow label={t('txn.partnerCovered')} value={fmtAmt((tx as any).partnerCoveredAmount)} theme={theme} />
+              </>
+            )}
+          </>
+        )}
         <Divider theme={theme} />
         <InfoRow
           label={t('txn.commissionPaidBy')}
-          value={(tx as any).commissionSide === 'payout' ? t('txn.receiverDeducted') : t('txn.senderAdded')}
+          value={(tx as any).commissionSide === 'payout'
+            ? t('txn.receiverDeducted')
+            : (tx as any).commissionSide === 'payout_extra'
+              ? t('txn.receiverExtraDetail')
+              : t('txn.senderAdded')}
           theme={theme}
         />
         <Divider theme={theme} />
         <InfoRow label={t('txn.createdBy')} value={(tx as any).createdBy?.name} theme={theme} />
         <Divider theme={theme} />
         <InfoRow label={t('txn.createdAt')} value={fmtDateTime((tx as any).createdAt)} theme={theme} />
+        {(tx as any).customerTokenNo && (
+          <>
+            <Divider theme={theme} />
+            <InfoRow label={t('txn.tokenNo')} value={(tx as any).customerTokenNo} theme={theme} />
+          </>
+        )}
         {(tx as any).approvedBy && (
           <>
             <Divider theme={theme} />

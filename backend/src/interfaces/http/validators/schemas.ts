@@ -44,6 +44,7 @@ export const schemas: Record<string, Joi.Schema> = {
       type: Joi.string().valid(...Object.values(COMMISSION_TYPE)),
       value: Joi.number().min(0),
     }),
+    masterCommissionPct: Joi.number().min(0).max(100),
   }).min(1),
 
   // User
@@ -143,6 +144,14 @@ export const schemas: Record<string, Joi.Schema> = {
     username: Joi.string().alphanum().min(3).max(30).required(),
     password: Joi.string().min(8).max(72).required(),
     name: Joi.string().min(2).max(100).required(),
+  }),
+
+  // HQ Commission
+  createHQSettlement: Joi.object({
+    branchId: objectId.optional(), // required when HO initiates; ignored for branch role
+    itemIds: Joi.array().items(objectId.required()).min(1).required(),
+    paymentMode: Joi.string().valid(...Object.values(PAYMENT_METHOD)).required(),
+    notes: Joi.string().max(500).optional().allow('', null),
   }),
 
   // Settings

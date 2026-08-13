@@ -21,10 +21,13 @@ export default class AddExternalEntry {
 
     const date = entryDate || toISTDate(new Date());
 
+    const { transactionId } = params;
+
     const [entry] = await Promise.all([
       ExternalLedgerModel.create({
         tenantId,
         externalAccountId: accountId,
+        transactionId: transactionId || null,
         type,
         direction,
         amount,

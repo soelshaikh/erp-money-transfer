@@ -29,14 +29,16 @@ interface UserItemProps {
   theme: any;
   onToggle: (item: any) => void;
   onSuspend: (item: any) => void;
+  onUnsuspend: (item: any) => void;
   onManageDevices: (item: any) => void;
   onToggleCommissionPermission: (item: any) => void;
   suspendingId: string | null;
+  unsuspendingId: string | null;
   disablingId: string | null;
   t: (key: string) => string;
 }
 
-function UserItem({ item, theme, onToggle, onSuspend, onManageDevices, onToggleCommissionPermission, suspendingId, disablingId, t }: UserItemProps) {
+function UserItem({ item, theme, onToggle, onSuspend, onUnsuspend, onManageDevices, onToggleCommissionPermission, suspendingId, unsuspendingId, disablingId, t }: UserItemProps) {
   const isActive = item.status === 'active';
   const isSuspended = item.status === 'suspended';
   const canOverride = item.permissions?.canOverrideCommission === true;
@@ -67,6 +69,11 @@ function UserItem({ item, theme, onToggle, onSuspend, onManageDevices, onToggleC
           <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
             @{item.username} · {item.role === 'head_office' ? t('user.headOffice') : item.role === 'branch' ? t('user.branch') : item.role === 'super_admin' ? t('user.superAdmin') : item.role}
           </Text>
+          {item.role === 'branch' && item.branchId?.code && (
+            <Text style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '600', marginTop: 1 }]} numberOfLines={1}>
+              {item.branchId.code} — {item.branchId.name}
+            </Text>
+          )}
         </View>
 
         {/* Status badge */}
@@ -108,6 +115,20 @@ function UserItem({ item, theme, onToggle, onSuspend, onManageDevices, onToggleC
             }
           </TouchableOpacity>
         )}
+
+        {/* Unsuspend — only when suspended */}
+        {isSuspended && (
+          <TouchableOpacity
+            onPress={() => onUnsuspend(item)}
+            style={{ padding: theme.spacing.sm }}
+            disabled={unsuspendingId === item._id}
+          >
+            {unsuspendingId === item._id
+              ? <ActivityIndicator size="small" color={theme.colors.success} />
+              : <Ionicons name="lock-open-outline" size={18} color={theme.colors.success} />
+            }
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Commission override row — branch users only */}
@@ -146,6 +167,7 @@ export function UserListScreen() {
   const tabBarHeight = useBottomTabBarHeight();
 
   const [suspendingId, setSuspendingId] = useState<string | null>(null);
+  const [unsuspendingId, setUnsuspendingId] = useState<string | null>(null);
   const [suspendModal, setSuspendModal] = useState<{ user: any; transactions: any[] } | null>(null);
   const [disableModal, setDisableModal] = useState<{ user: any; transactions: any[] } | null>(null);
   const [disablingId, setDisablingId] = useState<string | null>(null);
@@ -172,6 +194,14 @@ export function UserListScreen() {
       setSuspendModal(null);
       Alert.alert('Error', parseApiError(err) ?? 'Failed to suspend user');
     },
+  });
+
+  const unsuspendMutation = useMutation({
+    mutationFn: (id: string) => userApi.unsuspend(id),
+    onMutate: (id) => setUnsuspendingId(id),
+    onSettled: () => setUnsuspendingId(null),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+    onError: (err: any) => Alert.alert('Error', parseApiError(err) ?? 'Failed to unsuspend user'),
   });
 
   const commissionPermMutation = useMutation({
@@ -209,6 +239,17 @@ export function UserListScreen() {
     } finally {
       setSuspendingId(null);
     }
+  };
+
+  const handleUnsuspend = (item: any) => {
+    Alert.alert(
+      t('user.unsuspendTitle'),
+      `"${item.name}" ${t('user.unsuspendMsg')}`,
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('user.unsuspendBtn'), onPress: () => unsuspendMutation.mutate(item._id) },
+      ]
+    );
   };
 
   const handleManageDevices = (item: any) => {
@@ -315,9 +356,11 @@ export function UserListScreen() {
             theme={theme}
             onToggle={handleToggle}
             onSuspend={handleSuspend}
+            onUnsuspend={handleUnsuspend}
             onManageDevices={handleManageDevices}
             onToggleCommissionPermission={handleToggleCommissionPermission}
             suspendingId={suspendingId}
+            unsuspendingId={unsuspendingId}
             disablingId={disablingId}
             t={t}
           />

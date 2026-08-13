@@ -9,6 +9,7 @@ import { useAuthStore } from '../../../store/authStore';
 import { transactionApi } from '../api/transactionApi';
 import { branchApi } from '../../branch/api/branchApi';
 import { settingsApi } from '../../settings/api/settingsApi';
+import { externalAccountApi } from '../../branch/api/externalAccountApi';
 import { AppButton } from '../../../shared/components/AppButton';
 import { AppInput } from '../../../shared/components/AppInput';
 import { AppCard } from '../../../shared/components/AppCard';
@@ -50,7 +51,8 @@ export function CreateTransactionScreen({ navigation }: Props) {
     overrideCommission: boolean;
     commissionType: string;
     commissionValue: string;
-    commissionSide: 'collection' | 'payout';
+    commissionSide: 'collection' | 'payout' | 'payout_extra';
+    externalAccountId: string | null;
   }>({
     payoutBranchId: null,
     amount: '',
@@ -62,6 +64,7 @@ export function CreateTransactionScreen({ navigation }: Props) {
     commissionType: 'flat',
     commissionValue: '',
     commissionSide: 'collection',
+    externalAccountId: null,
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
@@ -75,9 +78,16 @@ export function CreateTransactionScreen({ navigation }: Props) {
     queryFn: settingsApi.get,
     staleTime: 300_000,
   });
+  const { data: partnersData } = useQuery({
+    queryKey: ['external-accounts', 'active'],
+    queryFn: () => externalAccountApi.list('active'),
+    staleTime: 60_000,
+  });
   const allBranches = (branchesData as any) || [];
   const payoutBranches = allBranches.filter((b: any) => b._id !== user?.branchId);
   const myBranch = allBranches.find((b: any) => b._id === user?.branchId);
+  const myPartners: any[] = (partnersData as any) || [];
+  const selectedPartner = myPartners.find((p: any) => p._id === form.externalAccountId) || null;
 
   const validate = () => {
     const e: { [key: string]: string } = {};
@@ -111,6 +121,7 @@ export function CreateTransactionScreen({ navigation }: Props) {
             value: parseFloat(form.commissionValue) || 0,
           },
         }),
+        ...(form.externalAccountId && { externalAccountId: form.externalAccountId }),
       }, idempotencyKey);
     },
     onSuccess: (data: any) => {
@@ -204,6 +215,117 @@ export function CreateTransactionScreen({ navigation }: Props) {
           />
         </AppCard>
 
+        {/* Partner section — only shown if this branch has active partners */}
+        {myPartners.length > 0 && (
+          <AppCard style={{ marginBottom: theme.spacing.md }}>
+            <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm }]}>PARTNER (OPTIONAL)</Text>
+
+            {/* None chip */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: theme.spacing.sm }}>
+              <View style={{ flexDirection: 'row', gap: theme.spacing.xs }}>
+                <TouchableOpacity
+                  onPress={() => setForm((f) => ({ ...f, externalAccountId: null }))}
+                  activeOpacity={0.7}
+                  style={{
+                    paddingHorizontal: theme.spacing.sm, paddingVertical: 7,
+                    borderRadius: theme.borderRadius.sm, borderWidth: 1.5,
+                    borderColor: !form.externalAccountId ? theme.colors.primary : theme.colors.border,
+                    backgroundColor: !form.externalAccountId ? withAlpha(theme.colors.primary, 0.08) : theme.colors.inputBackground,
+                  }}
+                >
+                  <Text style={{ color: !form.externalAccountId ? theme.colors.primary : theme.colors.textSecondary, fontWeight: !form.externalAccountId ? '700' : '400', fontSize: 13 }}>
+                    None
+                  </Text>
+                </TouchableOpacity>
+                {myPartners.map((p: any) => {
+                  const sel = form.externalAccountId === p._id;
+                  const avail = (p.balance ?? 0) - (p.onHold ?? 0);
+                  const availColor = avail <= 0 ? theme.colors.error : theme.colors.success;
+                  return (
+                    <TouchableOpacity
+                      key={p._id}
+                      onPress={() => setForm((f) => ({ ...f, externalAccountId: sel ? null : p._id }))}
+                      activeOpacity={0.7}
+                      style={{
+                        paddingHorizontal: theme.spacing.sm, paddingVertical: 7,
+                        borderRadius: theme.borderRadius.sm, borderWidth: 1.5,
+                        borderColor: sel ? theme.colors.primary : theme.colors.border,
+                        backgroundColor: sel ? withAlpha(theme.colors.primary, 0.08) : theme.colors.inputBackground,
+                      }}
+                    >
+                      <Text style={{ color: sel ? theme.colors.primary : theme.colors.textSecondary, fontWeight: sel ? '700' : '400', fontSize: 13 }}>
+                        {p.code}
+                      </Text>
+                      <Text style={{ color: availColor, fontSize: 10, fontWeight: '600', marginTop: 1 }} allowFontScaling={false}>
+                        {fmtAmt(Math.max(0, avail))} avail
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            {/* Selected partner details */}
+            {selectedPartner && (() => {
+              const avail = (selectedPartner.balance ?? 0) - (selectedPartner.onHold ?? 0);
+              const parsedAmt = parseFloat(form.amount) || 0;
+              const covered = parsedAmt > 0 ? Math.min(parsedAmt, Math.max(0, avail)) : null;
+              const due = covered !== null && parsedAmt > avail ? parsedAmt - Math.max(0, avail) : 0;
+              return (
+                <View style={{ backgroundColor: withAlpha(theme.colors.primary, 0.06), borderRadius: theme.borderRadius.sm, padding: theme.spacing.sm, gap: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="people-outline" size={14} color={theme.colors.primary} />
+                    <Text style={[theme.typography.label, { color: theme.colors.primary }]}>{selectedPartner.name}</Text>
+                    {selectedPartner.contactPerson ? (
+                      <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>· {selectedPartner.contactPerson}</Text>
+                    ) : null}
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: theme.spacing.lg }}>
+                    <View>
+                      <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>Balance</Text>
+                      <Text style={[theme.typography.label, { color: selectedPartner.balance < 0 ? theme.colors.error : theme.colors.text }]} allowFontScaling={false}>
+                        {fmtAmt(Math.abs(selectedPartner.balance ?? 0))}
+                      </Text>
+                    </View>
+                    {(selectedPartner.onHold ?? 0) > 0 && (
+                      <View>
+                        <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>On Hold</Text>
+                        <Text style={[theme.typography.label, { color: theme.colors.textSecondary }]} allowFontScaling={false}>
+                          {fmtAmt(selectedPartner.onHold ?? 0)}
+                        </Text>
+                      </View>
+                    )}
+                    <View>
+                      <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>Available</Text>
+                      <Text style={[theme.typography.label, { color: avail <= 0 ? theme.colors.error : theme.colors.success }]} allowFontScaling={false}>
+                        {fmtAmt(Math.max(0, avail))}
+                      </Text>
+                    </View>
+                  </View>
+                  {covered !== null && (
+                    <View style={{ flexDirection: 'row', gap: theme.spacing.lg, marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: withAlpha(theme.colors.primary, 0.15) }}>
+                      <View>
+                        <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>Partner covers</Text>
+                        <Text style={[theme.typography.label, { color: theme.colors.success }]} allowFontScaling={false}>{fmtAmt(covered)}</Text>
+                      </View>
+                      <View>
+                        <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>Branch covers</Text>
+                        <Text style={[theme.typography.label, { color: theme.colors.text }]} allowFontScaling={false}>{fmtAmt(Math.max(0, parsedAmt - covered))}</Text>
+                      </View>
+                      {due > 0 && (
+                        <View>
+                          <Text style={[theme.typography.caption, { color: theme.colors.error }]}>Partner due</Text>
+                          <Text style={[theme.typography.label, { color: theme.colors.error }]} allowFontScaling={false}>{fmtAmt(due)}</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+              );
+            })()}
+          </AppCard>
+        )}
+
         <AppCard style={{ marginBottom: theme.spacing.md }}>
           <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.md }]}>{t('txn.amountSection')}</Text>
 
@@ -213,8 +335,9 @@ export function CreateTransactionScreen({ navigation }: Props) {
           </Text>
           <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginBottom: theme.spacing.md }}>
             {([
-              { value: 'collection', label: t('txn.senderPays'), sub: t('txn.senderPaysSub') },
-              { value: 'payout',     label: t('txn.receiverPays'), sub: t('txn.receiverPaysSub') },
+              { value: 'collection',   label: t('txn.senderPays'),      sub: t('txn.senderPaysSub') },
+              { value: 'payout',       label: t('txn.receiverPays'),    sub: t('txn.receiverPaysSub') },
+              { value: 'payout_extra', label: t('txn.receiverPaysExtra'), sub: t('txn.receiverPaysExtraSub') },
             ] as const).map((opt) => {
               const sel = form.commissionSide === opt.value;
               return (
@@ -224,7 +347,7 @@ export function CreateTransactionScreen({ navigation }: Props) {
                   activeOpacity={0.7}
                   style={{
                     flex: 1,
-                    paddingHorizontal: theme.spacing.sm,
+                    paddingHorizontal: theme.spacing.xs,
                     paddingVertical: 10,
                     borderRadius: theme.borderRadius.md,
                     borderWidth: 1.5,
@@ -257,12 +380,14 @@ export function CreateTransactionScreen({ navigation }: Props) {
             <Text style={[theme.typography.caption, { color: theme.colors.primary, lineHeight: 18, flex: 1 }]}>
               {form.commissionSide === 'collection'
                 ? `${t('txn.commCollectionNote')} ${myBranch?.name || t('txn.collectionBranch')}.`
-                : t('txn.commPayoutNote')}
+                : form.commissionSide === 'payout_extra'
+                  ? t('txn.receiverExtraDetail')
+                  : t('txn.commPayoutNote')}
             </Text>
           </View>
 
           <AppInput
-            label={form.commissionSide === 'collection' ? t('txn.transferAmount') : t('txn.totalFromSender')}
+            label={form.commissionSide === 'payout' ? t('txn.totalFromSender') : t('txn.transferAmount')}
             value={form.amount}
             onChangeText={(v: string) => setForm((f) => ({ ...f, amount: v }))}
             placeholder={t('txn.amountPlaceholder')}
@@ -344,14 +469,15 @@ export function CreateTransactionScreen({ navigation }: Props) {
             if (parsedAmt <= 0 || !form.payoutBranchId) return null;
             const selectedPayoutBranch = payoutBranches.find((b: any) => b._id === form.payoutBranchId);
             const globalComm = (settingsData as any)?.settings?.commission || {};
-            const sourceBranch = form.commissionSide === 'payout' ? selectedPayoutBranch : myBranch;
+            const isPayoutSide = form.commissionSide === 'payout' || form.commissionSide === 'payout_extra';
+            const sourceBranch = isPayoutSide ? selectedPayoutBranch : myBranch;
             const isOverrideActive = form.overrideCommission && canOverrideCommission && !!form.commissionValue;
             const isBranchConfig = !isOverrideActive && !!sourceBranch?.commissionConfig?.enabled;
             const cType = isOverrideActive ? form.commissionType : (isBranchConfig ? sourceBranch.commissionConfig.type : (globalComm.type || 'flat'));
             const cValue = isOverrideActive ? (parseFloat(form.commissionValue) || 0) : (isBranchConfig ? sourceBranch.commissionConfig.value : (globalComm.value || 0));
             const cAmount = cType === 'percentage' ? Math.round(parsedAmt * cValue / 100) : cValue;
             const senderPays = form.commissionSide === 'collection' ? parsedAmt + cAmount : parsedAmt;
-            const receiverGets = form.commissionSide === 'collection' ? parsedAmt : parsedAmt - cAmount;
+            const receiverGets = form.commissionSide === 'payout' ? parsedAmt - cAmount : parsedAmt;
             const accentColor = isOverrideActive ? '#7c3aed' : (isBranchConfig ? '#d97706' : theme.colors.primary);
             const badgeText = isOverrideActive ? 'OVERRIDE' : (isBranchConfig ? 'BRANCH' : 'GLOBAL');
             const rateLabel = isOverrideActive
@@ -381,7 +507,9 @@ export function CreateTransactionScreen({ navigation }: Props) {
                     <Text style={[theme.typography.label, { color: theme.colors.text }]} allowFontScaling={false}>₹{senderPays.toLocaleString('en-IN')}</Text>
                   </View>
                   <View>
-                    <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>Commission</Text>
+                    <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+                      {form.commissionSide === 'payout_extra' ? 'Extra (receiver)' : 'Commission'}
+                    </Text>
                     <Text style={[theme.typography.label, { color: accentColor }]} allowFontScaling={false}>₹{cAmount.toLocaleString('en-IN')}</Text>
                   </View>
                   <View>

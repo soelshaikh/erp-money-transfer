@@ -18,10 +18,12 @@ import { LoadingScreen } from '../../../shared/components/LoadingScreen';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { parseApiError } from '../../../utils/apiError';
 import { externalAccountApi } from '../api/externalAccountApi';
+import { branchApi } from '../api/branchApi';
 
 const TYPE_META: Record<string, { icon: string; label: string }> = {
   deposit:    { icon: 'arrow-down-circle',  label: 'Deposit'    },
   due:        { icon: 'arrow-up-circle',    label: 'Due'        },
+  withdrawal: { icon: 'wallet-outline',     label: 'Txn Used'   },
   adjustment: { icon: 'swap-horizontal',    label: 'Adjustment' },
 };
 
@@ -178,6 +180,27 @@ export function ExternalAccountDetailScreen() {
 
   const { accountId } = route.params;
   const [showEntry, setShowEntry] = useState(false);
+  const [showBranchPicker, setShowBranchPicker] = useState(false);
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
+
+  const { data: branchesRaw } = useQuery({
+    queryKey: ['branches', 'active'],
+    queryFn: branchApi.listActive,
+    staleTime: 60_000,
+    enabled: isHO,
+  });
+  const branches: any[] = (branchesRaw as any) || [];
+
+  const assignBranchMutation = useMutation({
+    mutationFn: (branchId: string) => externalAccountApi.update(accountId, { branchId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['external-ledger', accountId] });
+      qc.invalidateQueries({ queryKey: ['external-accounts'] });
+      setShowBranchPicker(false);
+      setSelectedBranchId(null);
+    },
+    onError: (err: any) => Alert.alert('Error', parseApiError(err) || 'Failed'),
+  });
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['external-ledger', accountId],
@@ -195,6 +218,8 @@ export function ExternalAccountDetailScreen() {
   const account: any = (data as any)?.account;
   const entries: any[] = (data as any)?.entries || [];
   const balance: number = account?.balance ?? 0;
+  const onHold: number = account?.onHold ?? 0;
+  const available: number = balance - onHold;
   const isNeg  = balance < 0;
   const balColor = isNeg ? theme.colors.error : balance === 0 ? theme.colors.textSecondary : theme.colors.success;
 
@@ -211,9 +236,14 @@ export function ExternalAccountDetailScreen() {
       {/* Balance card */}
       <AppCard style={{ marginBottom: theme.spacing.md }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.sm }}>
-          <View>
+          <View style={{ flex: 1, marginRight: theme.spacing.sm }}>
             <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{account?.name}</Text>
             <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>Code: {account?.code}</Text>
+            {account?.branchId?.name ? (
+              <Text style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '600' }]}>
+                {account.branchId.code} — {account.branchId.name}
+              </Text>
+            ) : null}
             {account?.contactPerson ? <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>{account.contactPerson}{account.phone ? ` · ${account.phone}` : ''}</Text> : null}
           </View>
           <View style={{ alignItems: 'flex-end' }}>
@@ -223,6 +253,11 @@ export function ExternalAccountDetailScreen() {
             <Text style={{ color: balColor, fontWeight: '800', fontSize: 24 }} allowFontScaling={false}>
               {fmtAmt(Math.abs(balance))}
             </Text>
+            {onHold > 0 && (
+              <Text style={{ fontSize: 10, color: theme.colors.textSecondary, marginTop: 2 }} allowFontScaling={false}>
+                {fmtAmt(onHold)} on hold · avail {fmtAmt(Math.max(0, available))}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -254,6 +289,58 @@ export function ExternalAccountDetailScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Branch assignment — HO only */}
+        {isHO && (
+          <View style={{ marginTop: theme.spacing.sm, paddingTop: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.xs }}>
+              <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, fontWeight: '600' }]}>LINKED BRANCH</Text>
+              <TouchableOpacity onPress={() => { setSelectedBranchId(account?.branchId?._id || account?.branchId || null); setShowBranchPicker((v) => !v); }}>
+                <Text style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '600' }]}>
+                  {showBranchPicker ? 'Cancel' : account?.branchId ? 'Change' : 'Assign Branch'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {!showBranchPicker && !account?.branchId && (
+              <View style={{ backgroundColor: withAlpha(theme.colors.warning, 0.08), borderRadius: theme.borderRadius.sm, padding: theme.spacing.sm, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="warning-outline" size={14} color={theme.colors.warning} />
+                <Text style={[theme.typography.caption, { color: theme.colors.warning, flex: 1 }]}>No branch assigned — branch users cannot see this partner</Text>
+              </View>
+            )}
+
+            {showBranchPicker && (
+              <View style={{ gap: theme.spacing.sm }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
+                  <View style={{ flexDirection: 'row', gap: theme.spacing.xs }}>
+                    {branches.map((b: any) => {
+                      const sel = selectedBranchId === b._id;
+                      return (
+                        <TouchableOpacity
+                          key={b._id}
+                          onPress={() => setSelectedBranchId(b._id)}
+                          style={{ paddingHorizontal: theme.spacing.sm, paddingVertical: 7, borderRadius: theme.borderRadius.sm, borderWidth: 1.5, borderColor: sel ? theme.colors.primary : theme.colors.border, backgroundColor: sel ? withAlpha(theme.colors.primary, 0.08) : theme.colors.inputBackground }}
+                        >
+                          <Text style={{ color: sel ? theme.colors.primary : theme.colors.textSecondary, fontWeight: sel ? '700' : '400', fontSize: 13 }}>{b.code} — {b.name}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+                <TouchableOpacity
+                  onPress={() => selectedBranchId && assignBranchMutation.mutate(selectedBranchId)}
+                  disabled={!selectedBranchId || assignBranchMutation.isPending}
+                  style={{ paddingVertical: 10, borderRadius: theme.borderRadius.sm, backgroundColor: selectedBranchId ? theme.colors.primary : withAlpha(theme.colors.primary, 0.3), alignItems: 'center' }}
+                >
+                  {assignBranchMutation.isPending
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Save Branch</Text>}
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
       </AppCard>
 
       <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.xs }]}>

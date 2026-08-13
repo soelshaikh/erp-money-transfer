@@ -1,9 +1,10 @@
 import Commission from '../../../domain/value-objects/Commission';
 import TokenNumber from '../../../domain/value-objects/TokenNumber';
 import { AUDIT_ACTIONS, COMMISSION_SIDE, COMMISSION_TYPE, MODULES, NOTIFICATION_TYPE, ROLES } from '../../../config/constants';
-import { NotFoundError, BusinessRuleError } from '../../../domain/errors';
+import { NotFoundError, BusinessRuleError, ValidationError } from '../../../domain/errors';
 import logger from '../../../config/logger';
 import { todayIST } from '../../../utils/dateIST';
+import ExternalAccountModel from '../../../infrastructure/db/models/ExternalAccount.model';
 
 export default class CreateTransaction {
   transactionRepository: any;
@@ -25,8 +26,9 @@ export default class CreateTransaction {
   }
 
   async execute(params: any): Promise<any> {
-    const { tenantId, collectionBranchId, payoutBranchId, amount, remarks, paymentMethod, collectionPhotoUrl, customerTokenNo, createdBy, actorName, actorUsername } = params;
-    const commissionSide: string = params.commissionSide === COMMISSION_SIDE.PAYOUT ? COMMISSION_SIDE.PAYOUT : COMMISSION_SIDE.COLLECTION;
+    const { tenantId, collectionBranchId, payoutBranchId, amount, remarks, paymentMethod, collectionPhotoUrl, customerTokenNo, createdBy, actorName, actorUsername, externalAccountId } = params;
+    const validSides = Object.values(COMMISSION_SIDE) as string[];
+    const commissionSide: string = validSides.includes(params.commissionSide) ? params.commissionSide : COMMISSION_SIDE.COLLECTION;
 
     logger.info({ tenantId, collectionBranchId, payoutBranchId, amount, commissionSide }, '[TXN:UC] execute started — fetching tenant + branches');
 
@@ -83,7 +85,7 @@ export default class CreateTransaction {
     // Determine what the commission would be WITHOUT any override (needed for override audit)
     // Commission config is read from the branch that earns it: payout branch when commissionSide=payout, collection branch otherwise
     const globalCommission = tenant.settings?.commission || {};
-    const sourceBranch = commissionSide === COMMISSION_SIDE.PAYOUT ? payoutBranch : collectionBranch;
+    const sourceBranch = (commissionSide === COMMISSION_SIDE.PAYOUT || commissionSide === COMMISSION_SIDE.PAYOUT_EXTRA) ? payoutBranch : collectionBranch;
     const originalType: string = sourceBranch.commissionConfig?.enabled
       ? (sourceBranch.commissionConfig.type || COMMISSION_TYPE.FLAT)
       : (globalCommission.type || COMMISSION_TYPE.FLAT);
@@ -115,6 +117,26 @@ export default class CreateTransaction {
       '[TXN:UC] commission calculated',
     );
 
+    // --- Partner (ExternalAccount) validation and onHold ---
+    let partnerCoveredAmount = 0;
+    let partner: any = null;
+
+    if (externalAccountId) {
+      partner = await ExternalAccountModel.findOne({ _id: externalAccountId, tenantId, branchId: collectionBranchId, status: 'active' });
+      if (!partner) throw new ValidationError('Partner account not found or not linked to this branch');
+
+      const availableBalance = partner.balance - partner.onHold;
+      partnerCoveredAmount = Math.max(0, Math.min(amount, availableBalance));
+
+      // Lock partner balance portion for this pending transaction
+      await ExternalAccountModel.updateOne(
+        { _id: partner._id, tenantId },
+        { $inc: { onHold: partnerCoveredAmount } },
+      );
+
+      logger.info({ externalAccountId, availableBalance, partnerCoveredAmount }, '[TXN:UC] partner on-hold locked');
+    }
+
     const now = new Date();
     const dateStr = todayIST();
     const sequence = await this.transactionRepository.getDailySequence(tenantId, collectionBranch.code, dateStr);
@@ -138,28 +160,33 @@ export default class CreateTransaction {
       collectionPhotoUrl: collectionPhotoUrl || null,
       customerTokenNo: customerTokenNo || null,
       createdBy,
+      externalAccountId: externalAccountId || null,
+      partnerCoveredAmount,
     });
 
     logger.info({ transactionId: transaction._id, tokenNumber }, '[TXN:UC] transaction saved to DB');
 
-    // Credit collection branch with actual cash received from sender:
-    // collection side → sender paid amount + commission, so credit both
-    // payout side → sender paid exact amount, commission earned later by payout branch
-    const collectionCredit = commissionSide === COMMISSION_SIDE.COLLECTION ? amount + commissionAmount : amount;
+    // Credit collection branch with the amount NOT covered by partner:
+    // collection side → (amount − partnerCovered) + commission
+    // payout side → amount − partnerCovered
+    const branchPortion = amount - partnerCoveredAmount;
+    const collectionCredit = commissionSide === COMMISSION_SIDE.COLLECTION ? branchPortion + commissionAmount : branchPortion;
 
-    logger.info({ collectionBranchId, collectionCredit, commissionSide }, '[TXN:UC] crediting collection branch ledger');
+    logger.info({ collectionBranchId, collectionCredit, branchPortion, partnerCoveredAmount, commissionSide }, '[TXN:UC] crediting collection branch ledger');
 
-    await this.branchLedgerRepository.addEntry(tenantId, collectionBranchId, {
-      transactionId: transaction._id,
-      type: 'credit',
-      amount: collectionCredit,
-      description: `Collected ${commissionSide === COMMISSION_SIDE.COLLECTION ? `₹${collectionCredit} (incl. ₹${commissionAmount} commission)` : `₹${amount}`} → Payout to ${payoutBranch.name}`,
-      event: 'collection',
-      tokenNumber,
-    });
+    if (collectionCredit > 0) {
+      await this.branchLedgerRepository.addEntry(tenantId, collectionBranchId, {
+        transactionId: transaction._id,
+        type: 'credit',
+        amount: collectionCredit,
+        description: `Collected ${commissionSide === COMMISSION_SIDE.COLLECTION ? `₹${collectionCredit} (incl. ₹${commissionAmount} commission)` : `₹${branchPortion}`} → Payout to ${payoutBranch.name}${partner ? ` [Partner: ${partner.name}]` : ''}`,
+        event: 'collection',
+        tokenNumber,
+      });
+    }
 
     // If creditCommissionToSendingBranch is ON and receiver pays, track commission lifecycle from creation
-    const isPayoutSide = commissionSide === COMMISSION_SIDE.PAYOUT;
+    const isPayoutSide = commissionSide === COMMISSION_SIDE.PAYOUT || commissionSide === COMMISSION_SIDE.PAYOUT_EXTRA;
     if (isPayoutSide && commissionAmount > 0 && tenant.features?.creditCommissionToSendingBranch === true) {
       this.commissionPayableRepository.create({
         tenantId,

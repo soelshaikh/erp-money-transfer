@@ -1,0 +1,76 @@
+ERP Money Transfer - Setup Guide
+=================================
+
+
+SUPER ADMIN LOGIN
+-----------------
+Company ID : system
+Username   : superadmin
+Password   : Admin@1234
+
+(Use this to register a new company and create head office account)
+
+
+----------------------------------
+STEP BY STEP SETUP
+----------------------------------
+
+STEP 1 - Register Company
+We (system provider) will log in as super admin and register your company.
+We will create your head office account and share the login details with you.
+
+You will receive:
+- Company ID (example: acme)
+- Username
+- Password
+
+
+STEP 2 - Head Office Login
+Open the app.
+Enter Company ID, Username, and Password.
+Tap Sign In.
+
+
+STEP 3 - Create a Branch
+Go to Branches.
+Tap Add Branch.
+Fill in branch name and code.
+Tap Save.
+
+
+STEP 4 - Create a Staff Account
+Go to Users.
+Tap Add User.
+Fill in name, username, and password.
+Select the branch.
+Tap Save.
+
+Share the Company ID, username, and password with the staff member.
+
+
+STEP 5 - Staff Login (First Time)
+Staff opens the app.
+Enters Company ID, username, and password.
+Taps Sign In.
+
+Staff will see a "Pending Approval" screen.
+This is normal. Their device needs approval before they can use the system.
+
+
+STEP 6 - Approve the Device (Head Office)
+Go to Device Approvals.
+Find the pending request.
+Tap Approve.
+
+The staff app will automatically update and they will be logged in.
+
+To reject - tap Reject.
+The staff member will not be able to log in from that device.
+
+
+STEP 7 - Done
+After approval, staff can log in normally and start using the system.
+
+
+NOTE: Every new device needs approval.
+If a staff member changes their phone, they will go through the approval step again.

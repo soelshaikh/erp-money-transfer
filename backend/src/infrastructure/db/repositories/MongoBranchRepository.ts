@@ -48,4 +48,8 @@ export default class MongoBranchRepository extends IBranchRepository {
   async countNonHeadOffice(tenantId: any): Promise<number> {
     return BranchModel.countDocuments({ tenantId, type: { $ne: 'head_office' } });
   }
+
+  async findHeadOfficeBranch(tenantId: string): Promise<any | null> {
+    return BranchModel.findOne({ tenantId, type: 'head_office' }).lean();
+  }
 }

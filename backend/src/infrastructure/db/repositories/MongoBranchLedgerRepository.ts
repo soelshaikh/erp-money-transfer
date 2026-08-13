@@ -53,6 +53,10 @@ function buildIncrement(event: string, amount: number): Record<string, number> {
       return { balance: -amount, commissionPayable: -amount };
     case 'commission_settlement_in':
       return { balance: amount, commissionReceivable: -amount };
+    case 'hq_commission_out':
+      return { balance: -amount };
+    case 'hq_commission_in':
+      return { balance: amount };
     default:
       return {};
   }

@@ -19,6 +19,7 @@ export default function userRoutes(userController: any) {
   router.get('/:id/active-transactions', userController.getActiveTransactions);
   router.patch('/:id/status', userController.toggleStatus);
   router.patch('/:id/suspend', userController.suspendUser);
+  router.patch('/:id/unsuspend', userController.unsuspendUser);
   router.get('/:id', userController.getOne);
   router.patch('/:id', validate('updateUser'), userController.update);
 

@@ -30,6 +30,7 @@ export const COMMISSION_TYPE = Object.freeze({
 export const COMMISSION_SIDE = Object.freeze({
   COLLECTION: 'collection',
   PAYOUT: 'payout',
+  PAYOUT_EXTRA: 'payout_extra',
 } as const);
 
 export const DEVICE_STATUS = Object.freeze({
@@ -62,6 +63,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   UPDATE: 'UPDATE',
   DELETE: 'DELETE',
   SUSPEND: 'SUSPEND',
+  UNSUSPEND: 'UNSUSPEND',
   APPROVE: 'APPROVE',
   REJECT: 'REJECT',
   EXPORT: 'EXPORT',
@@ -69,6 +71,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   PAYMENT_COMPLETE: 'PAYMENT_COMPLETE',
   COMMISSION_OVERRIDE: 'COMMISSION_OVERRIDE',
   COMMISSION_SETTLEMENT: 'COMMISSION_SETTLEMENT',
+  HQ_COMMISSION_SETTLEMENT: 'HQ_COMMISSION_SETTLEMENT',
   DEVICE_APPROVE: 'DEVICE_APPROVE',
   DEVICE_REJECT: 'DEVICE_REJECT',
   DEVICE_SUSPEND: 'DEVICE_SUSPEND',
@@ -85,6 +88,7 @@ export const MODULES = Object.freeze({
   TENANT: 'Tenant',
   DEVICE: 'Device',
   COMMISSION_SETTLEMENT: 'CommissionSettlement',
+  HQ_COMMISSION: 'HQCommission',
 } as const);
 
 export const ID_PROOF_TYPES = Object.freeze(['aadhar', 'pan', 'passport', 'voter_id', 'driving_license', 'other']);

@@ -20,6 +20,7 @@ const branchLedgerSchema = new mongoose.Schema({
       'pending_payout', 'pending_payout_reversed', 'commission_earned',
       'commission_payable', 'commission_receivable',
       'commission_settlement_out', 'commission_settlement_in',
+      'hq_commission_out', 'hq_commission_in',
     ],
     required: true,
   },

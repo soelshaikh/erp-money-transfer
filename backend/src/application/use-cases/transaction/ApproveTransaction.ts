@@ -1,5 +1,8 @@
 import { AUDIT_ACTIONS, MODULES, NOTIFICATION_TYPE } from '../../../config/constants';
 import { NotFoundError, ConflictError } from '../../../domain/errors';
+import ExternalAccountModel from '../../../infrastructure/db/models/ExternalAccount.model';
+import ExternalLedgerModel from '../../../infrastructure/db/models/ExternalLedger.model';
+import { todayIST } from '../../../utils/dateIST';
 
 export default class ApproveTransaction {
   transactionRepository: any;
@@ -31,6 +34,65 @@ export default class ApproveTransaction {
 
     // Advance commission payable lifecycle if one exists for this transaction
     this.commissionPayableRepository.updateStatusByTransactionId(tenantId, transactionId, 'approved').catch(() => {});
+
+    // Partner (ExternalAccount) ledger deduction at approval
+    if (transaction.externalAccountId) {
+      const partner = await ExternalAccountModel.findOne({ _id: transaction.externalAccountId, tenantId });
+      if (partner) {
+        const partnerCovered = transaction.partnerCoveredAmount || 0;
+        const totalDeducted = transaction.amount;
+        const dueAmount = totalDeducted - partnerCovered;
+        const today = todayIST();
+        let runningBalance = partner.balance;
+
+        // Entry 1: consume the credit that was on hold
+        if (partnerCovered > 0) {
+          const balBefore = runningBalance;
+          const balAfter = runningBalance - partnerCovered;
+          await ExternalLedgerModel.create({
+            tenantId,
+            externalAccountId: partner._id,
+            transactionId: transaction._id,
+            type: 'withdrawal',
+            direction: 'debit',
+            amount: partnerCovered,
+            balanceBefore: balBefore,
+            balanceAfter: balAfter,
+            description: `Token ${transaction.tokenNumber} — credit consumed`,
+            entryDate: today,
+            createdBy: userId,
+            createdByName: actorName || null,
+          });
+          runningBalance = balAfter;
+        }
+
+        // Entry 2: due for amount beyond available credit
+        if (dueAmount > 0) {
+          const balBefore = runningBalance;
+          const balAfter = runningBalance - dueAmount;
+          await ExternalLedgerModel.create({
+            tenantId,
+            externalAccountId: partner._id,
+            transactionId: transaction._id,
+            type: 'due',
+            direction: 'debit',
+            amount: dueAmount,
+            balanceBefore: balBefore,
+            balanceAfter: balAfter,
+            description: `Token ${transaction.tokenNumber} — outstanding due`,
+            entryDate: today,
+            createdBy: userId,
+            createdByName: actorName || null,
+          });
+        }
+
+        // Atomic: deduct full amount from balance, release onHold
+        await ExternalAccountModel.updateOne(
+          { _id: partner._id, tenantId },
+          { $inc: { balance: -totalDeducted, onHold: -partnerCovered } },
+        );
+      }
+    }
 
     // Commit payout — first time payout branch balance is affected (pending_payout no longer written at creation)
     await this.branchLedgerRepository.addEntry(tenantId, transaction.payoutBranchId.toString(), {

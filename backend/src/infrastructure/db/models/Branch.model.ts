@@ -23,6 +23,7 @@ const branchSchema = new mongoose.Schema({
     type: { type: String, enum: ['flat', 'percentage'], default: 'flat' },
     value: { type: Number, default: 0 },
   },
+  masterCommissionPct: { type: Number, default: 0, min: 0, max: 100 },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 }, {
   timestamps: true,

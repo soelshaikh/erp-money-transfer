@@ -2,6 +2,201 @@
 
 ---
 
+## 2026-08-13 — Session 43
+
+### WORKLOG Audit Fixes: payout_extra chips, partner picker, staff branch visibility, HQ Commission access
+
+**Scope:** Continuation of audit findings from Session 42. Fixed gaps between documented features and actual implementation.
+
+---
+
+#### Fix 1 — Partner not showing in CreateTransactionScreen
+
+**Problem:** Client-side filter `bid === user?.branchId` compared ObjectId string vs raw ObjectId, silently rejecting all partners. Backend already filters by branch for branch users.
+
+**Fix:** Removed the redundant client-side filter in `CreateTransactionScreen.tsx`. `myPartners` now equals `(partnersData as any) || []` directly.
+
+---
+
+#### Fix 2 — payout_extra 3rd commission chip missing from CreateTransactionScreen
+
+**Problem:** Session 36 documented 3-chip selector but only 2 chips (`collection`, `payout`) were in the code.
+
+**Fix (CreateTransactionScreen.tsx):**
+- State type: `'collection' | 'payout' | 'payout_extra'`
+- Added 3rd chip: `payout_extra` → `t('txn.receiverPaysExtra')` / `t('txn.receiverPaysExtraSub')`
+- Contextual note: 3-way ternary for payout_extra showing `t('txn.receiverExtraDetail')`
+- Amount label: `payout` only gets "Total from sender" label; payout_extra uses "Transfer Amount"
+- `sourceBranch`: both `payout` and `payout_extra` use selectedPayoutBranch
+- `receiverGets`: `payout` deducts commission; `payout_extra` receiver gets full amount
+- Preview label: "Commission" becomes "Extra (receiver)" for payout_extra
+
+---
+
+#### Fix 3 — payout_extra 3rd chip missing from ShakhaEntryScreen
+
+**Same fixes applied to ShakhaEntryScreen.tsx:**
+- State type expanded to include `payout_extra`
+- 3rd chip added to commission selector
+- `isPayoutSide` variable for both `payout` and `payout_extra`
+- `receiverGets` logic: payout_extra receiver gets full parsedAmt
+- Preview label: "Extra (receiver)" when payout_extra
+
+---
+
+#### Fix 4 — Partner dropdown added to ShakhaEntryScreen
+
+**Problem:** ShakhaEntry had no way to link a partner (ExternalAccount) to a transaction.
+
+**Fix (ShakhaEntryScreen.tsx):** Added compact dropdown (same style as Mukkam picker) between Mukkam selector and commission override. Only shown when `myPartners.length > 0`. Includes bottom-sheet modal with "— None —" option. `externalAccountId` sent in mutation payload.
+
+---
+
+#### Fix 5 — Staff branch not visible in UserListScreen
+
+**Problem:** Branch users showed no branch info in the staff list — `branchId` was a raw ObjectId string.
+
+**Fix:** Added `.populate('branchId', 'name code')` to `MongoUserRepository.findAll()`. Mobile `UserListScreen.tsx` now shows `branchId.code — branchId.name` as a third caption line for branch-role users.
+
+---
+
+#### Fix 6 — HQ Commission inaccessible for branch users
+
+**Problem:** No permanent navigation entry to HQ Commission screens from branch's perspective. Only a conditional dashboard pill.
+
+**Fix:**
+- `SettingsScreen.tsx`: Added COMMISSION card for branch users navigating to `HQCommissionItems`
+- `MainNavigator.tsx`: Registered `HQCommissionItems`, `HQCommissionSettlements`, `HQCommissionSettlementDetail` screens inside SettingsStack
+
+---
+
+## 2026-08-13 — Session 42
+
+### Bug Fixes: Token Visibility, Device Session Cycle, Partner Account Display + Cache
+
+**Scope:** Four fixes applied this session, spanning backend and mobile.
+
+---
+
+#### Fix 1 — Token number not visible in TransactionDetailScreen
+
+**Problem:** Token number only appeared as small unlabeled text in the header card, not as a labeled row in the Details card.
+
+**Fix:** Added `InfoRow` with `t('txn.tokenLabel')` as the first labeled row in the TRANSFER DETAILS card of `TransactionDetailScreen.tsx`.
+
+---
+
+#### Fix 2 — Token number missing from ShakhaEntry today's table
+
+**Problem:** The "Today's Entries" table at the bottom of `ShakhaEntryScreen.tsx` had no tokenNumber visible anywhere.
+
+**Fix:** Added a small sub-line (fontSize 8) under each entry's amount showing the `tx.tokenNumber`.
+
+---
+
+#### Fix 3 — Device session suspension cycle (all devices keep getting suspended)
+
+**Root cause:** `CreateDeviceSession.ts` was calling `suspendAllExcept()` on EVERY re-login from an existing device — not just the first time. This created an endless cycle: re-login → all others suspended → they re-login → all suspended again.
+
+**Fix:** Moved `suspendAllExcept` out of the existing-session re-login path. It now only fires when a **brand-new device** is first auto-approved. For existing sessions, only the session's IP/status is updated.
+
+**Files changed:** `backend/src/application/use-cases/device/CreateDeviceSession.ts`
+
+---
+
+#### Fix 4 — Partner account: balance not visibly deducted + no partner info in transaction detail
+
+**Root cause A (cache):** `ExternalAccountDetailScreen` showed stale data after transaction approval because no cache invalidation was wired. The balance IS correctly deducted in `ApproveTransaction.ts` at approval time — but the partner account screen had no way to know a transaction was approved.
+
+**Fix A:** Added `qc.invalidateQueries({ queryKey: ['external-ledger'] })` and `['external-accounts']` to the `invalidate()` function in `TransactionDetailScreen.tsx`. After approval or completion, the partner account screen will auto-refresh next time it's visited.
+
+**Root cause B (missing populate + no UI):** `findById` in `MongoTransactionRepository.ts` did not populate `externalAccountId`, so the field came back as a raw ObjectId. `TransactionDetailScreen` had no partner info section.
+
+**Fix B:**
+- Added `.populate('externalAccountId', 'name code')` to `findById` in `MongoTransactionRepository.ts`
+- Added Partner Account row (and Partner Covered row if `partnerCoveredAmount > 0`) to the TRANSFER DETAILS card in `TransactionDetailScreen.tsx`
+- Added i18n keys `txn.partnerAccount` and `txn.partnerCovered` in `en.ts` and `gu.ts`
+
+**Files changed:**
+- `backend/src/infrastructure/db/repositories/MongoTransactionRepository.ts`
+- `mobile/src/features/transaction/screens/TransactionDetailScreen.tsx`
+- `mobile/src/i18n/locales/en.ts`
+- `mobile/src/i18n/locales/gu.ts`
+
+---
+
+## 2026-08-12 — Session 41
+
+### Feature: Master Commission (HQ Commission) — Mobile Screens Complete
+
+Completed Phase 6 of the HQ Commission feature (mobile screens). All backend work was done in the previous session.
+
+**New screens:**
+- `mobile/src/features/hqCommission/screens/HQCommissionItemsScreen.tsx` — FlatList of pending commission items with checkboxes, select-all toggle, payment mode chips, summary totals in bottom panel, "Process Selected" button → navigates to settlement detail. Header right → settlements history.
+- `mobile/src/features/hqCommission/screens/HQCommissionSettlementsScreen.tsx` — Settlement list with All/Pending/Completed filter chips. Shows branch, item count, HQ share, initiated by.
+- `mobile/src/features/hqCommission/screens/HQCommissionSettlementDetailScreen.tsx` — Header card with status/amount, branch details, line items (tokenNumber + commission + HQ share per item), audit trail (initiated/completed by), "Mark Received" button (HO only, pending only).
+
+**Navigation updates (`MainNavigator.tsx`):**
+- Added 3 HQ commission screens to `DashboardStack` (for branch + HO) and `BranchStack` (for HO).
+- Screen names: `HQCommissionItems`, `HQCommissionSettlements`, `HQCommissionSettlementDetail`.
+
+**Dashboard entry point (`DashboardScreen.tsx`):**
+- Added `hqCommissionApi.listItems()` query (enabled for branch + HO).
+- Branch role: pill inside branch balance card shows count + navigates to `HQCommissionItems` when pending > 0.
+- HO role: tappable card below branch breakdown section when pending items exist.
+
+**i18n:**
+- Added ~15 missing keys to `en.ts` and `gu.ts` in the `hqComm` namespace (settlementsEmptyHint, settlementTitle, initiatedByBranch, initiatedByHO, markReceivedConfirm, markReceivedHint, branchDetails, lineItems, history, initiatedLabel, completedLabel, processing, pendingItems, awaitingSettlement).
+
+---
+
+## 2026-08-11 — Session 40
+
+### Feature: Partner Branch Linkage + Transaction Integration — Complete
+
+**Requirement:** Partners (ExternalAccounts) had no branch linkage. Each partner must now be tied to one specific branch. Partner balance is shown separately (not merged into branch balance). When creating a transaction, branch users can optionally select a partner — the partner's available balance covers the transaction first, and only the excess affects the branch's own balance. At approval, partner balance is debited and two ledger entries are written. On rejection, partner onHold is released.
+
+**Financial logic confirmed with user:**
+- `partnerCoveredAmount` = `min(transactionAmount, partner.availableBalance)` — locked at creation
+- `branchCoveredAmount` = `transactionAmount − partnerCoveredAmount` — only this portion affects branch balance
+- At approval: Entry 1 = `withdrawal` (credit consumed), Entry 2 = `due` (shortfall, if any)
+- At rejection: release `onHold`, reverse only `branchCoveredAmount` from branch ledger
+
+---
+
+### Backend Changes
+
+**Models:**
+- `ExternalAccount.model.ts` — added `branchId` (required, ref Branch), `onHold` (default 0), new index on `(tenantId, branchId, status)`
+- `ExternalLedger.model.ts` — added `transactionId` (optional, ref Transaction), added `'withdrawal'` to type enum
+- `Transaction.model.ts` — added `externalAccountId` (optional, ref ExternalAccount), `partnerCoveredAmount` (default 0)
+
+**Use-cases:**
+- `CreateExternalAccount.ts` — now requires `branchId`, validates branch belongs to tenant via `branchRepository`
+- `GetExternalAccounts.ts` — supports optional `branchId` filter; populates `branchId.name/code`
+- `AddExternalEntry.ts` — accepts optional `transactionId`, stores on ledger entry
+- `CreateTransaction.ts` — partner logic: validates partner belongs to branch, locks `onHold`, adjusts collection credit to `amount − partnerCoveredAmount` (+ commission if applicable), stores `externalAccountId` + `partnerCoveredAmount` on transaction
+- `ApproveTransaction.ts` — writes two ExternalLedger entries at approval (withdrawal + due if applicable), atomically updates `balance` and releases `onHold`
+- `RejectTransaction.ts` — releases `onHold`, reverses only the branch-funded portion of collection credit
+- `GetDashboard.ts` — for branch role: also fetches active partners linked to that branch and includes them in response as `partners[]`
+
+**Controllers/Routes:**
+- `ExternalAccountController.list()` — branch users auto-filtered to their own branch; HO can filter by `branchId` query param
+- `ExternalAccountController.create()` — passes `branchId` from request body
+- `container.ts` — `CreateExternalAccount` now receives `branchRepository`
+
+---
+
+### Mobile Changes
+
+- `externalAccountApi.ts` — `list()` accepts optional `branchId` param; `create()` requires `branchId`
+- `ExternalAccountListScreen.tsx` — `CreateModal` now has branch picker (horizontal chip scroll, HO only); partner cards show branch name/code
+- `ExternalAccountDetailScreen.tsx` — shows `onHold` + available balance in header; `withdrawal` type added to `TYPE_META`; shows branch name in detail
+- `CreateTransactionScreen.tsx` — partner section card (collapsible, only shown if branch has active partners): chip picker showing partner code + available balance, selected partner summary (balance / on hold / available), live breakdown (partner covers / branch covers / partner due) that updates as amount is typed; `externalAccountId` passed to API
+- `DashboardScreen.tsx` — partner balances card shown below branch balance card for branch role; shows each partner's code, name, balance, on-hold, available
+
+---
+
 ## 2026-08-06 — Session 39
 
 ### Feature: Credit Commission to Sending Branch — Complete

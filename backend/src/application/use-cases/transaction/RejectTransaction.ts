@@ -1,5 +1,6 @@
 import { AUDIT_ACTIONS, MODULES, NOTIFICATION_TYPE } from '../../../config/constants';
 import { NotFoundError, ConflictError } from '../../../domain/errors';
+import ExternalAccountModel from '../../../infrastructure/db/models/ExternalAccount.model';
 
 export default class RejectTransaction {
   transactionRepository: any;
@@ -32,15 +33,31 @@ export default class RejectTransaction {
     // Cancel commission payable if one exists — transaction rejected, commission will never be earned
     this.commissionPayableRepository.updateStatusByTransactionId(tenantId, transactionId, 'cancelled').catch(() => {});
 
-    // Reverse the collection credit — collection branch returns the cash to sender
-    await this.branchLedgerRepository.addEntry(tenantId, transaction.collectionBranchId.toString(), {
-      transactionId: transaction._id,
-      type: 'debit',
-      amount: transaction.amount,
-      description: `Cancelled — Token ${transaction.tokenNumber} reversed. Reason: ${remarks || 'N/A'}`,
-      event: 'collection_reversed',
-      tokenNumber: transaction.tokenNumber,
-    });
+    // Release partner on-hold if a partner was linked
+    const partnerCovered = transaction.partnerCoveredAmount || 0;
+    if (transaction.externalAccountId && partnerCovered > 0) {
+      ExternalAccountModel.updateOne(
+        { _id: transaction.externalAccountId, tenantId },
+        { $inc: { onHold: -partnerCovered } },
+      ).catch(() => {});
+    }
+
+    // Reverse the branch-funded portion of the collection credit.
+    // For collection-side, the original credit included commission (branchPortion + commissionAmount),
+    // so the reversal must include it too.
+    const branchPortion = transaction.amount - partnerCovered;
+    const isCollectionSide = !transaction.commissionSide || transaction.commissionSide === 'collection';
+    const branchReversal = isCollectionSide ? branchPortion + (transaction.commissionAmount || 0) : branchPortion;
+    if (branchReversal > 0) {
+      await this.branchLedgerRepository.addEntry(tenantId, transaction.collectionBranchId.toString(), {
+        transactionId: transaction._id,
+        type: 'debit',
+        amount: branchReversal,
+        description: `Cancelled — Token ${transaction.tokenNumber} reversed. Reason: ${remarks || 'N/A'}`,
+        event: 'collection_reversed',
+        tokenNumber: transaction.tokenNumber,
+      });
+    }
 
     this.notificationService.notifyBranch(tenantId, transaction.collectionBranchId.toString(), {
       type: NOTIFICATION_TYPE.TRANSACTION_REJECTED,

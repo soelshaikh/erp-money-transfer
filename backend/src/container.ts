@@ -7,6 +7,8 @@ import MongoBranchLedgerRepository from './infrastructure/db/repositories/MongoB
 import MongoDeviceSessionRepository from './infrastructure/db/repositories/MongoDeviceSessionRepository';
 import MongoCommissionPayableRepository from './infrastructure/db/repositories/MongoCommissionPayableRepository';
 import MongoCommissionSettlementRepository from './infrastructure/db/repositories/MongoCommissionSettlementRepository';
+import MongoHQCommissionItemRepository from './infrastructure/db/repositories/MongoHQCommissionItemRepository';
+import MongoHQCommissionSettlementRepository from './infrastructure/db/repositories/MongoHQCommissionSettlementRepository';
 
 // Infrastructure — Services
 import MongoAuditService from './infrastructure/services/MongoAuditService';
@@ -75,17 +77,27 @@ import GetCommissionSettlements from './application/use-cases/commissionSettleme
 import CreateCommissionSettlement from './application/use-cases/commissionSettlement/CreateCommissionSettlement';
 import CompleteCommissionSettlement from './application/use-cases/commissionSettlement/CompleteCommissionSettlement';
 
+// Use-cases — HQ Commission
+import GetHQCommissionItems from './application/use-cases/hqCommission/GetHQCommissionItems';
+import CreateHQCommissionSettlement from './application/use-cases/hqCommission/CreateHQCommissionSettlement';
+import GetHQCommissionSettlements from './application/use-cases/hqCommission/GetHQCommissionSettlements';
+import GetHQCommissionSettlement from './application/use-cases/hqCommission/GetHQCommissionSettlement';
+import CompleteHQCommissionSettlement from './application/use-cases/hqCommission/CompleteHQCommissionSettlement';
+
 // Controllers
 import CommissionSettlementController from './interfaces/http/controllers/CommissionSettlementController';
+import HQCommissionController from './interfaces/http/controllers/HQCommissionController';
 
 // Routes
 import commissionSettlementRoutes from './interfaces/http/routes/commission-settlement.routes';
+import hqCommissionRoutes from './interfaces/http/routes/hq-commission.routes';
 
 // Use-cases — Branch delete
 import DeleteBranch from './application/use-cases/branch/DeleteBranch';
 
-// Use-cases — User suspend
+// Use-cases — User suspend / unsuspend
 import SuspendUser from './application/use-cases/user/SuspendUser';
+import UnsuspendUser from './application/use-cases/user/UnsuspendUser';
 import GetUserActiveTransactions from './application/use-cases/user/GetUserActiveTransactions';
 
 // Use-cases — Audit
@@ -156,6 +168,8 @@ export default function buildContainer(io: any) {
   const deviceSessionRepository = new MongoDeviceSessionRepository();
   const commissionPayableRepository = new MongoCommissionPayableRepository();
   const commissionSettlementRepository = new MongoCommissionSettlementRepository();
+  const hqCommissionItemRepository = new MongoHQCommissionItemRepository();
+  const hqCommissionSettlementRepository = new MongoHQCommissionSettlementRepository();
 
   // Services
   const auditService = new MongoAuditService();
@@ -187,7 +201,7 @@ export default function buildContainer(io: any) {
   const createTransaction = new CreateTransaction({ transactionRepository, branchRepository, tenantRepository, notificationService, auditService, branchLedgerRepository, commissionPayableRepository });
   const approveTransaction = new ApproveTransaction({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository, commissionPayableRepository });
   const rejectTransaction = new RejectTransaction({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository, commissionPayableRepository });
-  const completePayment = new CompletePayment({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository, tenantRepository, commissionPayableRepository });
+  const completePayment = new CompletePayment({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository, tenantRepository, commissionPayableRepository, hqCommissionItemRepository });
   const getTransactions = new GetTransactions({ transactionRepository });
   const getTransaction = new GetTransaction({ transactionRepository });
 
@@ -240,12 +254,20 @@ export default function buildContainer(io: any) {
   const completeCommissionSettlement = new CompleteCommissionSettlement({ commissionPayableRepository, commissionSettlementRepository, branchLedgerRepository, auditService });
   const commissionSettlementController = new CommissionSettlementController({ getCommissionPayables, getCommissionSettlements, createCommissionSettlement, completeCommissionSettlement, commissionSettlementRepository });
 
+  const getHQCommissionItems = new GetHQCommissionItems({ hqCommissionItemRepository });
+  const createHQCommissionSettlement = new CreateHQCommissionSettlement({ hqCommissionItemRepository, hqCommissionSettlementRepository, branchRepository, auditService });
+  const getHQCommissionSettlements = new GetHQCommissionSettlements({ hqCommissionSettlementRepository });
+  const getHQCommissionSettlement = new GetHQCommissionSettlement({ hqCommissionSettlementRepository, hqCommissionItemRepository });
+  const completeHQCommissionSettlement = new CompleteHQCommissionSettlement({ hqCommissionSettlementRepository, hqCommissionItemRepository, branchLedgerRepository, branchRepository, auditService });
+  const hqCommissionController = new HQCommissionController({ getHQCommissionItems, createHQCommissionSettlement, getHQCommissionSettlements, getHQCommissionSettlement, completeHQCommissionSettlement });
+
   const getAuditLogs = new GetAuditLogs();
   const deleteBranch = new DeleteBranch({ branchRepository, notificationService, auditService });
   const suspendUser = new SuspendUser({ userRepository, deviceSessionRepository, notificationService, auditService });
+  const unsuspendUser = new UnsuspendUser({ userRepository, auditService });
   const getUserActiveTransactions = new GetUserActiveTransactions({ userRepository, transactionRepository });
   const resetDevData = new ResetDevData();
-  const createExternalAccount = new CreateExternalAccount();
+  const createExternalAccount = new CreateExternalAccount({ branchRepository });
   const getExternalAccounts   = new GetExternalAccounts();
   const updateExternalAccount = new UpdateExternalAccount();
   const addExternalEntry      = new AddExternalEntry();
@@ -262,7 +284,7 @@ export default function buildContainer(io: any) {
   // Controllers
   const authController = new AuthController({ loginUseCase, refreshTokenUseCase, tenantRepository });
   const branchController = new BranchController({ createBranch, updateBranch, getBranches, branchRepository, deleteBranch, getBranchLedger, getBranchDailyBalances, notificationService, auditService });
-  const userController = new UserController({ createUser, updateUser, getUsers, resetPassword, userRepository, deviceSessionRepository, suspendUser, getUserActiveTransactions, notificationService, auditService });
+  const userController = new UserController({ createUser, updateUser, getUsers, resetPassword, userRepository, deviceSessionRepository, suspendUser, unsuspendUser, getUserActiveTransactions, notificationService, auditService });
   const reportController = new ReportController({
     getReports,
     exportReport,
@@ -300,6 +322,8 @@ export default function buildContainer(io: any) {
     auditLogController,
     deviceSessionController,
     commissionSettlementController,
+    hqCommissionController,
+    hqCommissionRoutes,
     reportRoutes,
     notificationRoutes,
     auditLogRoutes,

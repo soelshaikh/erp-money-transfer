@@ -48,6 +48,11 @@ function TransactionItem({ item, onPress, theme }: TransactionItemProps) {
       <Text style={[theme.typography.h3, { color: theme.colors.text }]} allowFontScaling={false}>
         {fmtAmt(Number(item.amount))}
       </Text>
+      {!!item.customerTokenNo && (
+        <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginTop: 2 }]} numberOfLines={1} allowFontScaling={false}>
+          Token: {item.customerTokenNo}
+        </Text>
+      )}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: theme.spacing.sm }}>
         <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
           {item.collectionBranchId?.name} → {item.payoutBranchId?.name}

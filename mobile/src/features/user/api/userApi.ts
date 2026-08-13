@@ -8,6 +8,7 @@ export const userApi = {
   resetPassword: (id: string, newPassword: string) => apiClient.post(`/users/${id}/reset-password`, { newPassword }).then((r) => r.data.data),
   toggleStatus: (id: string) => apiClient.patch(`/users/${id}/status`).then((r) => r.data.data),
   suspend: (id: string) => apiClient.patch(`/users/${id}/suspend`).then((r) => r.data.data),
+  unsuspend: (id: string) => apiClient.patch(`/users/${id}/unsuspend`).then((r) => r.data.data),
   getActiveTransactions: (id: string) => apiClient.get(`/users/${id}/active-transactions`).then((r) => r.data.data),
   listDevices: (id: string) => apiClient.get(`/users/${id}/devices`).then((r) => r.data.data),
   addDevice: (id: string, body: { deviceId: string; deviceName?: string }) => apiClient.post(`/users/${id}/devices`, body).then((r) => r.data.data),

@@ -45,6 +45,7 @@ export default function createApp(container: any) {
   app.use('/api/v1/device-sessions', container.deviceSessionRoutes(container.deviceSessionController));
   app.use('/api/v1/app-install', appInstallRoutes(container.appInstallController));
   app.use('/api/v1/commission-settlements', container.commissionSettlementRoutes(container.commissionSettlementController));
+  app.use('/api/v1/hq-commission', container.hqCommissionRoutes(container.hqCommissionController));
   app.use('/api/v1/external-accounts', container.externalAccountRoutes(container.externalAccountController));
 
   // 404

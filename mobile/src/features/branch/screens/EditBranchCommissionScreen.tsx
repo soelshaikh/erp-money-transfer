@@ -32,6 +32,8 @@ export function EditBranchCommissionScreen({ navigation, route }: Props) {
   const [commissionType, setCommissionType] = useState<string | null>(null);
   const [commissionValue, setCommissionValue] = useState<string | null>(null);
   const [valueError, setValueError] = useState('');
+  const [masterPct, setMasterPct] = useState<string>('');
+  const [masterPctError, setMasterPctError] = useState('');
 
   // Once branch data loads, seed state (only once)
   React.useEffect(() => {
@@ -39,18 +41,21 @@ export function EditBranchCommissionScreen({ navigation, route }: Props) {
       setEnabled(branch.commissionConfig?.enabled || false);
       setCommissionType(branch.commissionConfig?.type || 'flat');
       setCommissionValue(String(branch.commissionConfig?.value ?? ''));
+      setMasterPct(String(branch.masterCommissionPct ?? '0'));
     }
   }, [branch]);
 
   const mutation = useMutation({
     mutationFn: () => {
       const cv = parseFloat(commissionValue || '0') || 0;
+      const mp = parseFloat(masterPct || '0') || 0;
       return branchApi.update(branchId, {
         commissionConfig: {
           enabled: enabled ?? false,
           type: commissionType || 'flat',
           value: cv,
         },
+        masterCommissionPct: mp,
       });
     },
     onSuccess: () => {
@@ -62,11 +67,14 @@ export function EditBranchCommissionScreen({ navigation, route }: Props) {
 
   const handleSave = () => {
     setValueError('');
+    setMasterPctError('');
     if (enabled) {
       const cv = parseFloat(commissionValue || '');
       if (isNaN(cv) || cv < 0) { setValueError('Enter a valid commission value'); return; }
       if (commissionType === 'percentage' && cv > 100) { setValueError('Percentage cannot exceed 100'); return; }
     }
+    const mp = parseFloat(masterPct || '0');
+    if (isNaN(mp) || mp < 0 || mp > 100) { setMasterPctError('Enter a value between 0 and 100'); return; }
     mutation.mutate();
   };
 
@@ -156,6 +164,25 @@ export function EditBranchCommissionScreen({ navigation, route }: Props) {
               />
             </>
           )}
+        </AppCard>
+
+        <AppCard style={{ marginTop: theme.spacing.md }}>
+          <Text style={[theme.typography.label, { color: theme.colors.text, marginBottom: 2 }]}>
+            {t('branch.masterCommTitle')}
+          </Text>
+          <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginBottom: theme.spacing.md }]}>
+            {t('branch.masterCommSub')}
+          </Text>
+          <AppInput
+            label={t('branch.masterCommField')}
+            value={masterPct}
+            onChangeText={(v: string) => { setMasterPct(v); setMasterPctError(''); }}
+            placeholder="0"
+            keyboardType="decimal-pad"
+            error={masterPctError}
+            returnKeyType="done"
+            onSubmitEditing={handleSave}
+          />
         </AppCard>
 
         <AppButton

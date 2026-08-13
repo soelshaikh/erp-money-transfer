@@ -1,5 +1,6 @@
 import { AUDIT_ACTIONS, COMMISSION_SIDE, MODULES, NOTIFICATION_TYPE, ROLES } from '../../../config/constants';
 import { NotFoundError, BusinessRuleError } from '../../../domain/errors';
+import IHQCommissionItemRepository from '../../ports/IHQCommissionItemRepository';
 
 export default class CompletePayment {
   transactionRepository: any;
@@ -9,6 +10,7 @@ export default class CompletePayment {
   branchRepository: any;
   tenantRepository: any;
   commissionPayableRepository: any;
+  private hqCommissionItemRepository: IHQCommissionItemRepository;
 
   constructor(deps: any) {
     this.transactionRepository = deps.transactionRepository;
@@ -18,6 +20,7 @@ export default class CompletePayment {
     this.branchRepository = deps.branchRepository;
     this.tenantRepository = deps.tenantRepository;
     this.commissionPayableRepository = deps.commissionPayableRepository;
+    this.hqCommissionItemRepository = deps.hqCommissionItemRepository;
   }
 
   async execute(params: any): Promise<any> {
@@ -55,10 +58,11 @@ export default class CompletePayment {
     ]);
 
     // Commission handling — only applies when payout/payout_extra side and commission > 0
-    const isPayoutSide = (completed.commissionSide === COMMISSION_SIDE.PAYOUT || completed.commissionSide === 'payout_extra');
+    const isPayoutSide = (completed.commissionSide === COMMISSION_SIDE.PAYOUT || completed.commissionSide === COMMISSION_SIDE.PAYOUT_EXTRA);
+    let creditToSender = false;
     if (isPayoutSide && completed.commissionAmount > 0) {
       const tenant = await this.tenantRepository.findById(tenantId);
-      const creditToSender = tenant?.features?.creditCommissionToSendingBranch === true;
+      creditToSender = tenant?.features?.creditCommissionToSendingBranch === true;
 
       if (creditToSender) {
         // Flag ON: payout branch owes commission to collection (sending) branch
@@ -116,6 +120,24 @@ export default class CompletePayment {
           tokenNumber: completed.tokenNumber,
         });
       }
+    }
+
+    // Create HQ commission item if the earning branch has masterCommissionPct set.
+    // Skipped when creditCommissionToSendingBranch is ON for payout-side (those use CommissionSettlement).
+    const earningBranch = isPayoutSide ? payoutBranch : collectionBranch;
+    const hqSharePct: number = (earningBranch?.masterCommissionPct ?? 0);
+    if (completed.commissionAmount > 0 && hqSharePct > 0 && !creditToSender) {
+      this.hqCommissionItemRepository.create({
+        tenantId,
+        branchId: earningBranch._id,
+        branchName: earningBranch.name as string,
+        branchCode: earningBranch.code as string,
+        transactionId: completed._id,
+        tokenNumber: completed.tokenNumber,
+        commissionAmount: completed.commissionAmount,
+        hqSharePct,
+        hqShareAmount: Math.round(completed.commissionAmount * hqSharePct / 100),
+      }).catch(() => {});
     }
 
     this.notificationService.notifyBranch(tenantId, completed.collectionBranchId.toString(), {

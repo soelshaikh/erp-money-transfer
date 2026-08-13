@@ -1,5 +1,6 @@
 import { ROLES } from '../../../config/constants';
 import { todayIST } from '../../../utils/dateIST';
+import ExternalAccountModel from '../../../infrastructure/db/models/ExternalAccount.model';
 
 export default class GetDashboard {
   transactionRepository: any;
@@ -34,7 +35,13 @@ export default class GetDashboard {
     const result: any = { today: todayStats, allTime: allTimeStats };
 
     if (role === ROLES.BRANCH && branchId) {
-      const branch = await this.branchRepository.findById(tenantId, branchId);
+      const [branch, partners] = await Promise.all([
+        this.branchRepository.findById(tenantId, branchId),
+        ExternalAccountModel.find({ tenantId, branchId, status: 'active' })
+          .select('_id name code balance onHold')
+          .sort({ name: 1 })
+          .lean(),
+      ]);
       if (branch) {
         result.balance = branch.balance ?? 0;
         result.committedPayout = branch.committedPayout ?? 0;
@@ -43,6 +50,7 @@ export default class GetDashboard {
         result.commissionPayable = branch.commissionPayable ?? 0;
         result.commissionReceivable = branch.commissionReceivable ?? 0;
       }
+      result.partners = partners || [];
     }
 
     // Head office and super admin also get branch count

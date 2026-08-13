@@ -18,6 +18,7 @@ export default class MongoTransactionRepository extends ITransactionRepository {
       .populate('payoutBranchId', 'name code')
       .populate('createdBy', 'name username')
       .populate('approvedBy', 'name username')
+      .populate('externalAccountId', 'name code')
       .lean();
     return doc || null;
   }

@@ -56,6 +56,11 @@ import { AppAccessRequestsScreen } from '../features/tenant/screens/AppAccessReq
 import { ExternalAccountListScreen } from '../features/branch/screens/ExternalAccountListScreen';
 import { ExternalAccountDetailScreen } from '../features/branch/screens/ExternalAccountDetailScreen';
 
+// Screens — HQ commission
+import { HQCommissionItemsScreen } from '../features/hqCommission/screens/HQCommissionItemsScreen';
+import { HQCommissionSettlementsScreen } from '../features/hqCommission/screens/HQCommissionSettlementsScreen';
+import { HQCommissionSettlementDetailScreen } from '../features/hqCommission/screens/HQCommissionSettlementDetailScreen';
+
 // Screens — notifications & reports
 import { NotificationsScreen } from '../features/notifications/screens/NotificationsScreen';
 import { ReportsScreen } from '../features/reports/screens/ReportsScreen';
@@ -306,6 +311,21 @@ function DashboardStack() {
             component={CommissionSettlementDetailScreen}
             options={{ title: 'Settlement Detail' }}
           />
+          <Stack.Screen
+            name="HQCommissionItems"
+            component={HQCommissionItemsScreen}
+            options={{ title: t('nav.hqCommissionItems') }}
+          />
+          <Stack.Screen
+            name="HQCommissionSettlements"
+            component={HQCommissionSettlementsScreen}
+            options={{ title: t('nav.hqCommissionSettlements') }}
+          />
+          <Stack.Screen
+            name="HQCommissionSettlementDetail"
+            component={HQCommissionSettlementDetailScreen}
+            options={{ title: t('nav.hqCommissionDetail') }}
+          />
         </>
       )}
       <Stack.Screen
@@ -373,6 +393,21 @@ function BranchStack() {
         component={CommissionSettlementDetailScreen}
         options={{ title: 'Settlement Detail' }}
       />
+      <Stack.Screen
+        name="HQCommissionItems"
+        component={HQCommissionItemsScreen}
+        options={{ title: t('nav.hqCommissionItems') }}
+      />
+      <Stack.Screen
+        name="HQCommissionSettlements"
+        component={HQCommissionSettlementsScreen}
+        options={{ title: t('nav.hqCommissionSettlements') }}
+      />
+      <Stack.Screen
+        name="HQCommissionSettlementDetail"
+        component={HQCommissionSettlementDetailScreen}
+        options={{ title: t('nav.hqCommissionDetail') }}
+      />
     </Stack.Navigator>
   );
 }
@@ -424,6 +459,9 @@ function SettingsStack() {
       <Stack.Screen name="EditSettings" component={EditSettingsScreen} options={{ title: t('nav.editSettings') }} />
       <Stack.Screen name="LoginActivity" component={LoginActivityScreen} options={{ title: t('nav.loginActivity') }} />
       <Stack.Screen name="ActivityLog" component={ActivityLogScreen} options={{ title: t('nav.auditLog') }} />
+      <Stack.Screen name="HQCommissionItems" component={HQCommissionItemsScreen} options={{ title: t('nav.hqCommissionItems') }} />
+      <Stack.Screen name="HQCommissionSettlements" component={HQCommissionSettlementsScreen} options={{ title: t('nav.hqCommissionSettlements') }} />
+      <Stack.Screen name="HQCommissionSettlementDetail" component={HQCommissionSettlementDetailScreen} options={{ title: t('nav.hqCommissionDetail') }} />
     </Stack.Navigator>
   );
 }

@@ -22,4 +22,7 @@ export default class IBranchRepository {
 
   /** Count active non-head-office branches for branch limit enforcement */
   async countNonHeadOffice(tenantId: any): Promise<number> { throw new Error('Not implemented'); }
+
+  /** Returns the head_office type branch for the tenant, or null if none exists */
+  async findHeadOfficeBranch(tenantId: string): Promise<any | null> { throw new Error('Not implemented'); }
 }

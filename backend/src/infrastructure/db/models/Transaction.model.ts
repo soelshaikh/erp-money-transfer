@@ -30,6 +30,8 @@ const transactionSchema = new mongoose.Schema({
   payoutPhotoUrl: { type: String, default: null },
   remarks: { type: String, default: null },
   customerTokenNo: { type: String, default: null },
+  externalAccountId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExternalAccount', default: null },
+  partnerCoveredAmount: { type: Number, default: 0 },
 }, {
   timestamps: true,
   collection: 'transactions',
