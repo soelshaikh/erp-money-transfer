@@ -24,6 +24,11 @@ const branchSchema = new mongoose.Schema({
     value: { type: Number, default: 0 },
   },
   masterCommissionPct: { type: Number, default: 0, min: 0, max: 100 },
+  workingHours: {
+    enabled: { type: Boolean, default: false },
+    startTime: { type: String, default: null }, // HH:MM IST; null = inherit from company
+    endTime:   { type: String, default: null },
+  },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 }, {
   timestamps: true,

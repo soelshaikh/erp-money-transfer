@@ -13,6 +13,7 @@ import { EmptyState } from '../../../shared/components/EmptyState';
 import { parseApiError } from '../../../utils/apiError';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { appAccessApi } from '../api/appAccessApi';
+import { fmtDateTime } from '../../../utils/fmt';
 
 const STATUS_FILTERS = ['all', 'pending', 'approved', 'rejected'];
 
@@ -27,10 +28,6 @@ function getStatusColor(status: string, theme: any): string {
   if (status === 'approved') return theme.colors.success;
   if (status === 'rejected') return theme.colors.error;
   return theme.colors.textSecondary;
-}
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 export function AppAccessRequestsScreen() {
@@ -150,7 +147,7 @@ export function AppAccessRequestsScreen() {
                     {item.platform?.toUpperCase()} · {item.ip || 'No IP'}
                   </Text>
                   <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
-                    {fmtDate(item.createdAt)}
+                    {fmtDateTime(item.createdAt)}
                   </Text>
                 </View>
 
@@ -200,12 +197,12 @@ export function AppAccessRequestsScreen() {
 
               {item.approvedAt && (
                 <Text style={[theme.typography.caption, { color: theme.colors.success, marginTop: theme.spacing.xs }]}>
-                  Approved {fmtDate(item.approvedAt)}
+                  Approved {fmtDateTime(item.approvedAt)}
                 </Text>
               )}
               {item.rejectedAt && (
                 <Text style={[theme.typography.caption, { color: theme.colors.error, marginTop: theme.spacing.xs }]}>
-                  Rejected {fmtDate(item.rejectedAt)}
+                  Rejected {fmtDateTime(item.rejectedAt)}
                 </Text>
               )}
             </AppCard>

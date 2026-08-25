@@ -29,6 +29,11 @@ export const schemas: Record<string, Joi.Schema> = {
     city: Joi.string().max(100).optional(),
     state: Joi.string().max(100).optional(),
     pincode: Joi.string().length(6).pattern(/^\d+$/).optional(),
+    workingHours: Joi.object({
+      enabled: Joi.boolean().required(),
+      startTime: hhmm.optional().allow(null, ''),
+      endTime:   hhmm.optional().allow(null, ''),
+    }).optional(),
   }),
 
   updateBranch: Joi.object({
@@ -45,6 +50,11 @@ export const schemas: Record<string, Joi.Schema> = {
       value: Joi.number().min(0),
     }),
     masterCommissionPct: Joi.number().min(0).max(100),
+    workingHours: Joi.object({
+      enabled: Joi.boolean().required(),
+      startTime: hhmm.optional().allow(null, ''),
+      endTime:   hhmm.optional().allow(null, ''),
+    }),
   }).min(1),
 
   // User
@@ -87,6 +97,7 @@ export const schemas: Record<string, Joi.Schema> = {
     paymentMethod: Joi.string().valid(...Object.values(PAYMENT_METHOD)).default('cash'),
     collectionPhotoUrl: Joi.string().uri().optional().allow('', null),
     customerTokenNo: Joi.string().max(100).optional().allow('', null),
+    externalAccountId: objectId.optional().allow(null),
     commissionOverride: Joi.object({
       type: Joi.string().valid(...Object.values(COMMISSION_TYPE)).required(),
       value: Joi.number().min(0).required(),
@@ -177,8 +188,21 @@ export const schemas: Record<string, Joi.Schema> = {
         maxAmountPerTransaction: Joi.number().min(0).optional(),
         dailyLimitPerBranch: Joi.number().min(0).optional(),
       }).optional(),
+      workingHours: Joi.object({
+        enabled: Joi.boolean().required(),
+        startTime: hhmm.optional().allow(null, ''),
+        endTime:   hhmm.optional().allow(null, ''),
+      }).optional(),
     }),
   }).min(1),
+
+  updateBranchWorkingHours: Joi.object({
+    workingHours: Joi.object({
+      enabled: Joi.boolean().required(),
+      startTime: hhmm.optional().allow(null, ''),
+      endTime:   hhmm.optional().allow(null, ''),
+    }).required(),
+  }),
 };
 
 function humanizeJoiMessage(detail: Joi.ValidationErrorItem): string {

@@ -27,6 +27,12 @@ const transactionLimitsSchema = new mongoose.Schema({
   dailyLimitPerBranch: { type: Number, default: 0 },     // 0 = no limit, in rupees
 }, { _id: false });
 
+const workingHoursSchema = new mongoose.Schema({
+  enabled: { type: Boolean, default: false },
+  startTime: { type: String, default: '09:00' }, // HH:MM IST
+  endTime: { type: String, default: '18:00' },   // HH:MM IST
+}, { _id: false });
+
 const settingsSchema = new mongoose.Schema({
   otpExpiryMinutes: { type: Number, default: 10 },
   smsTemplateId: { type: String, default: null },
@@ -34,6 +40,7 @@ const settingsSchema = new mongoose.Schema({
   timezone: { type: String, default: 'Asia/Kolkata' },
   loginTimeRestriction: { type: Boolean, default: false },
   transactionLimits: { type: transactionLimitsSchema, default: () => ({}) },
+  workingHours: { type: workingHoursSchema, default: () => ({}) },
 }, { _id: false });
 
 const tenantSchema = new mongoose.Schema({

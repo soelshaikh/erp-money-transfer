@@ -73,12 +73,15 @@ export function HQCommissionItemsScreen({ navigation }: Props) {
   const totalHQShare = selectedItems.reduce((s, i) => s + i.hqShareAmount, 0);
 
   const mutation = useMutation({
-    mutationFn: () =>
-      hqCommissionApi.createSettlement({
+    mutationFn: () => {
+      const firstSelected = items.find((i) => selectedIds.has(i._id));
+      return hqCommissionApi.createSettlement({
+        branchId: firstSelected?.branchId,
         itemIds: Array.from(selectedIds),
         paymentMode,
         notes: notes.trim() || undefined,
-      }),
+      });
+    },
     onSuccess: (settlement) => {
       qc.invalidateQueries({ queryKey: ['hqCommissionItems'] });
       qc.invalidateQueries({ queryKey: ['hqCommissionSettlements'] });

@@ -379,6 +379,8 @@ const en = {
     processing: 'Processing',
     pendingItems: 'HQ Commission Due',
     awaitingSettlement: 'awaiting settlement',
+    pendingSettlements: 'HQ Commission Settlements',
+    settlementsAwaitingApproval: 'settlements awaiting your approval',
   },
 
   ledger: {
@@ -570,6 +572,28 @@ const en = {
     inactive: 'Inactive',
     branchLimit: 'Branch Limit',
     staffLimit: 'Staff Limit',
+  },
+
+  signOff: {
+    title: 'Sign Off',
+    confirm: 'Sign off for today? You will need head office approval to log in again on the same day.',
+    staffSignOffs: 'Staff Sign-offs',
+    staffSignOffsHint: 'View and manage today\'s signed-off staff',
+    enableTitle: 'Enable Re-login',
+    enableConfirm: 'Allow {{name}} to log in again today?',
+    enableBtn: 'Enable',
+    enableFailed: 'Could not enable re-login. Please try again.',
+    reLoginEnabled: 'Re-login Enabled',
+    signedOffAt: 'Signed off at',
+    enabledBy: 'Enabled by',
+    noneToday: 'No staff have signed off today',
+    todayDate: 'Date',
+    workingHours: 'Working Hours',
+    startTime: 'Start Time',
+    endTime: 'End Time',
+    enabled: 'Enabled',
+    branchOverride: 'Branch-specific (overrides company)',
+    companyLevel: 'Company-level default',
   },
 } as const;
 

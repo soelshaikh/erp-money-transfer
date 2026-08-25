@@ -2,6 +2,187 @@
 
 ---
 
+## 2026-08-23 — Session 47
+
+### Feature: Sign-Off / Working Hours
+
+**Requirement:** Staff must be able to sign off at end of day. Working hours can be configured company-wide (Tenant settings) or branch-specific (Branch model). Priority: branch > company > no restriction. After sign-off, staff sees NotesScreen (not login). To re-login same day, HO must enable re-login. Next day, sign-off state auto-clears.
+
+---
+
+#### Backend
+
+**New model `UserDaySignOff.model.ts`**
+- Fields: `tenantId, userId, branchId, date (YYYY-MM-DD IST), signedOffAt, reLoginEnabled, enabledBy, enabledAt`
+- Unique index on `{ tenantId, userId, date }` — one record per user per day
+
+**`Tenant.model.ts`** — Added `workingHoursSchema` and `settings.workingHours: { enabled, startTime, endTime }` (HH:MM IST)
+
+**`Branch.model.ts`** — Added `workingHours: { enabled, startTime, endTime }` (branch-level override)
+
+**New repository `MongoUserSignOffRepository.ts`** — `upsert`, `findByUserAndDate`, `findByDate`, `enableReLogin`
+
+**New use-cases (`backend/src/application/use-cases/signOff/`):**
+- `SignOffUser.ts` — authenticated branch staff; upserts sign-off record for today IST
+- `GetSignOffStatus.ts` — public (no auth); takes `{ slug, userId }`; returns `{ signedOff, reLoginEnabled }`
+- `GetDaySignOffs.ts` — HO only; lists today's sign-off records with populated user/branch/enabledBy
+- `EnableReLogin.ts` — HO only; marks `reLoginEnabled = true` on a sign-off record
+
+**New controller `SignOffController.ts` + routes `sign-off.routes.ts`**
+- `POST /api/v1/sign-off` — branch staff signs off (auth required)
+- `GET /api/v1/sign-off/status?slug=xyz&userId=abc` — public, no auth
+- `GET /api/v1/sign-offs` — HO: list today's sign-offs
+- `PATCH /api/v1/sign-offs/:id/enable` — HO: enable re-login
+
+**`Login.ts`** — Two new checks added after password verification:
+1. **Working hours** (branch overrides company): if outside `startTime–endTime` → `ForbiddenError`
+2. **Sign-off check**: if signed off today AND re-login not enabled → `ForbiddenError`
+
+**`schemas.ts`** — Added `workingHours` to `updateSettings`, `createBranch`, `updateBranch`
+
+**`container.ts` + `app.ts`** — Wired all new use-cases, controller, routes
+
+---
+
+#### Mobile
+
+**`authStore.ts`** — Added sign-off state: `isSignedOff`, `signedOffDate`, `signedOffUserId`; Actions: `signOff(userId)`, `clearSignOff()`, `loadSignOffState()`; `login()` clears sign-off state on success; sign-off state persisted in AsyncStorage keyed `sign_off_state`; On startup, if sign-off date ≠ today IST → auto-cleared
+
+**`AppNavigator.tsx`** — Added `isSignedOff → NotesScreen` branch (between `!isConfigured` and `pendingDeviceInfo`)
+
+**`NotesScreen.tsx`** — Added 3rd mode `signedOff`; on slug entry in sign-off mode → calls `GET /sign-off/status`; if `reLoginEnabled` → `clearSignOff()` → app re-renders to AuthNavigator; else → stays silently on NotesScreen
+
+**New `signOffApi.ts`** — `signOff`, `getStatus`, `list`, `enableReLogin`
+
+**New `DaySignOffsScreen.tsx`** — HO screen showing today's signed-off staff; "Enable" button per row with confirm alert; shows enabled-by info when re-login is enabled
+
+**`SettingsScreen.tsx`** — Added `confirmSignOff` handler calling API then `authStore.signOff()`; "Sign Off" button for branch role (amber outline); HO gets "Staff Sign-offs" link in Activity section → `DaySignOffsScreen`
+
+**`EditSettingsScreen.tsx`** — Added company-level working hours section: enabled toggle + start/end time inputs (HH:MM)
+
+**`CreateBranchScreen.tsx`** — Added branch-level working hours section (enabled toggle + times)
+
+**`EditBranchCommissionScreen.tsx`** — Added working hours AppCard below master commission; on save, includes `workingHours` in the PATCH payload
+
+**`MainNavigator.tsx`** — Registered `DaySignOffs` screen in SettingsStack
+
+**`en.ts` + `gu.ts`** — Added `signOff` namespace (18 keys each)
+
+---
+
+#### Key design decisions
+- Sign-off stores the `userId` in AsyncStorage (not a token), so the mobile can check re-login status via a public endpoint even after tokens are cleared
+- Sign-off clears auth tokens immediately (same as logout) but sets `isSignedOff` flag
+- Next-day auto-clear: on `loadSignOffState()`, if stored date ≠ today IST the record is discarded
+- Working hours check in Login uses `toLocaleTimeString` with `Asia/Kolkata` timezone (consistent with rest of IST logic)
+- Branch working hours override company working hours when `branch.workingHours.enabled = true`
+- The `GetSignOffStatus` endpoint is public (no auth) — it returns only `{ signedOff, reLoginEnabled }` booleans, no sensitive data
+- TypeScript compile: 0 errors after all changes
+
+---
+
+## 2026-08-15 — Session 46
+
+### Bug Fix: Partner balance not deducted after transaction
+
+**Root cause:** The `createTransaction` Joi schema in `schemas.ts` did not include `externalAccountId`. The validate middleware runs with `stripUnknown: true`, so any field not listed in the schema is removed from `req.body` before it reaches the controller. When the mobile sent `externalAccountId` in the create-transaction request, it was silently stripped. The use case then saw no partner, stored `externalAccountId: null` on the transaction, never put anything in `onHold`, and `ApproveTransaction` had nothing to deduct.
+
+**Fix:** Added `externalAccountId: objectId.optional().allow(null)` to `createTransaction` schema in `backend/src/interfaces/http/validators/schemas.ts`. No other code changes needed — all downstream logic (CreateTransaction, ApproveTransaction, RejectTransaction) was already correct.
+
+**Note for existing transactions:** Any past transactions created while this bug was present will have `externalAccountId: null` stored in the DB. Those cannot be retroactively fixed — only newly created transactions will be correctly linked to the partner.
+
+---
+
+## 2026-08-15 — Session 45
+
+### Bug Fixes: HQ Commission — "Branch not found" + HO "Mark as Complete" missing
+
+Two bugs reported by user:
+1. Branch initiates HQ commission settlement → HO sees no option to "Mark as Complete"
+2. HO tries to process HQ commission themselves → gets "Branch not found" error
+
+---
+
+#### Fix 1 — "Branch not found" when HO processes HQ Commission
+
+**Root cause:** `HQCommissionItemsScreen.tsx` never included `branchId` in the `createSettlement` API call. For `branch` role, the backend reads `branchId` from `req.user.branchId`. For `head_office` role, it reads `branchId` from `req.body.branchId` — which was absent, so it was `undefined`, causing `branchRepository.findById(tenantId, undefined)` to return null → `NotFoundError('Branch')`.
+
+**Fix (`HQCommissionItemsScreen.tsx`):** Modified mutation's `mutationFn` to extract `branchId` from the first selected item (`items.find(i => selectedIds.has(i._id))`) and pass it in the request body. Each `HQCommissionItem` already carries a `branchId` field. Server-side validation ("All items must belong to the same branch") still guards against mixed-branch selections.
+
+---
+
+#### Fix 2 — HO "Mark as Complete" option not reachable
+
+**Root cause:** The HO dashboard card for HQ commission used `isHOUser && hqPendingCount > 0`. When a branch creates a settlement, items move from `pending` to `in_settlement` status, so `hqPendingCount` drops to 0 and the card disappears. HO then had no navigation entry point to reach `HQCommissionSettlements` and find the pending settlement.
+
+**Fix (`DashboardScreen.tsx`):** Added a second query (`hqCommissionSettlements` with `status: 'pending'`) enabled for HO only. When pending settlements exist, a new amber "HQ Commission Settlements" card appears on the HO dashboard, navigating directly to `HQCommissionSettlements`. From there HO can tap the pending settlement and see the "Mark Received" button (the `canComplete = isPending && isHO` logic in `HQCommissionSettlementDetailScreen` was already correct).
+
+**i18n (`en.ts`, `gu.ts`):** Added `hqComm.pendingSettlements` and `hqComm.settlementsAwaitingApproval` keys.
+
+---
+
+## 2026-08-13 — Session 44
+
+### Bug Fixes: payout_extra backend, TransactionDetail display, rejection reversal
+
+**Root cause of payout_extra being broken end-to-end:** Session 36 added the mobile 3-chip selector for payout_extra but `PAYOUT_EXTRA` was never (or no longer) in `constants.ts`. Session 43 fixed the mobile UI gaps, but the backend still treated every `payout_extra` transaction as `collection`.
+
+---
+
+#### Fix 1 — `PAYOUT_EXTRA` missing from `constants.ts` (backend)
+
+`COMMISSION_SIDE` only had `COLLECTION` and `PAYOUT`. Added `PAYOUT_EXTRA: 'payout_extra'`.  
+Downstream effect: `Transaction.model.ts` enum and `schemas.ts` Joi validation now auto-include `payout_extra` via `Object.values(COMMISSION_SIDE)`.
+
+**File:** `backend/src/config/constants.ts`
+
+---
+
+#### Fix 2 — `CreateTransaction.ts` normalization collapsed payout_extra → collection
+
+Line 30 used a binary `=== PAYOUT ? PAYOUT : COLLECTION` which silently discarded `payout_extra`.  
+Also fixed: `sourceBranch` and `isPayoutSide` both now include `PAYOUT_EXTRA` (payout branch earns commission for both modes).  
+`finalAmount` and `collectionCredit` expressions were already structurally correct (their else-branches handle `payout_extra` right).
+
+**File:** `backend/src/application/use-cases/transaction/CreateTransaction.ts`
+
+---
+
+#### Fix 3 — `CompletePayment.ts` hardcoded `'payout_extra'` string replaced with constant
+
+`isPayoutSide` check used a raw string `=== 'payout_extra'`. Replaced with `COMMISSION_SIDE.PAYOUT_EXTRA`.
+
+**File:** `backend/src/application/use-cases/transaction/CompletePayment.ts`
+
+---
+
+#### Fix 4 — `TransactionDetailScreen` display for payout_extra
+
+- Header subtitle: was binary `payout` / else; added third branch for `payout_extra` ("Sender gives X · Receiver gets X · Receiver pays Y → Payout branch")
+- Added amber "COLLECT FROM RECEIVER" callout card for `payout_extra` (mirrors the blue "COLLECT FROM SENDER" callout for collection-side)
+- `commissionPaidBy` InfoRow: was binary; added `payout_extra` → `t('txn.receiverExtraDetail')`
+- Added i18n key `txn.collectFromReceiver` in `en.ts` and `gu.ts`
+
+**Files:** `TransactionDetailScreen.tsx`, `en.ts`, `gu.ts`
+
+---
+
+#### Fix 5 — `RejectTransaction.ts` commission not reversed for collection-side transactions
+
+**Bug:** Original collection credit for `collection` side = `branchPortion + commissionAmount`. Reversal was `amount - partnerCovered = branchPortion` — missing `commissionAmount`. Commission stayed on collection branch books permanently even after rejection.
+
+**Fix:** Detect collection-side via `transaction.commissionSide` and add `commissionAmount` to the reversal when applicable. `payout` and `payout_extra` reversal unchanged (their collection credits don't include commission).
+
+**File:** `backend/src/application/use-cases/transaction/RejectTransaction.ts`
+
+---
+
+#### Note — Issue 3 (ShakhaEntryScreen partner picker) was already implemented
+
+Session 43 added the partner dropdown to ShakhaEntryScreen (state, query, UI, modal, mutation payload). No further work needed.
+
+---
+
 ## 2026-08-13 — Session 43
 
 ### WORKLOG Audit Fixes: payout_extra chips, partner picker, staff branch visibility, HQ Commission access

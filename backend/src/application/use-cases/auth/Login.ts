@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import env from '../../../config/env';
 import { AUDIT_ACTIONS, DEVICE_STATUS, MODULES, ROLES } from '../../../config/constants';
 import { UnauthorizedError, ForbiddenError, AccountDisabledError, AccountSuspendedError } from '../../../domain/errors';
+import { todayIST } from '../../../utils/dateIST';
 
 export default class Login {
   userRepository: any;
@@ -11,6 +12,7 @@ export default class Login {
   auditService: any;
   notificationService: any;
   createDeviceSession: any;
+  userSignOffRepository: any;
 
   constructor(deps: any) {
     this.userRepository = deps.userRepository;
@@ -19,6 +21,7 @@ export default class Login {
     this.auditService = deps.auditService;
     this.notificationService = deps.notificationService || null;
     this.createDeviceSession = deps.createDeviceSession || null;
+    this.userSignOffRepository = deps.userSignOffRepository || null;
   }
 
   async execute(params: any): Promise<any> {
@@ -45,12 +48,37 @@ export default class Login {
       }
     }
 
-    // Login time restriction check
+    // Login time restriction check (per-user window)
     if (tenant.settings?.loginTimeRestriction) {
       const now = new Date();
       const hhmm = now.toTimeString().slice(0, 5); // "HH:MM"
       if (!this._withinHours(user, hhmm)) {
         throw new ForbiddenError('Login not allowed at this time');
+      }
+    }
+
+    // Working hours check (branch > company level) — branch users only
+    if (user.role === ROLES.BRANCH && user.branchId) {
+      const branch = await this.branchRepository.findById(tenant._id, user.branchId);
+      const wh = (branch?.workingHours?.enabled && branch?.workingHours?.startTime && branch?.workingHours?.endTime)
+        ? branch.workingHours
+        : (tenant.settings?.workingHours?.enabled ? tenant.settings.workingHours : null);
+
+      if (wh) {
+        const nowIST = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false });
+        const hhmm  = nowIST.slice(0, 5);
+        if (hhmm < wh.startTime || hhmm > wh.endTime) {
+          throw new ForbiddenError(`Branch is outside working hours (${wh.startTime} – ${wh.endTime})`);
+        }
+      }
+    }
+
+    // Sign-off check — blocked unless HO has enabled re-login
+    if (user.role === ROLES.BRANCH && this.userSignOffRepository) {
+      const today  = todayIST();
+      const record = await this.userSignOffRepository.findByUserAndDate(tenant._id, user._id, today);
+      if (record && !record.reLoginEnabled) {
+        throw new ForbiddenError('You have signed off for today. Contact head office to re-enable login.');
       }
     }
 

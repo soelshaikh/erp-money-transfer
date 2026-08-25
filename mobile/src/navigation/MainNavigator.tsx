@@ -23,6 +23,7 @@ import { CompletePaymentScreen } from '../features/transaction/screens/CompleteP
 import { CompleteByTokenScreen } from '../features/transaction/screens/CompleteByTokenScreen';
 import { SettingsScreen } from '../features/settings/screens/SettingsScreen';
 import { EditSettingsScreen } from '../features/settings/screens/EditSettingsScreen';
+import { DaySignOffsScreen } from '../features/signOff/screens/DaySignOffsScreen';
 
 // Screens — head office
 import { BranchListScreen } from '../features/branch/screens/BranchListScreen';
@@ -459,6 +460,7 @@ function SettingsStack() {
       <Stack.Screen name="EditSettings" component={EditSettingsScreen} options={{ title: t('nav.editSettings') }} />
       <Stack.Screen name="LoginActivity" component={LoginActivityScreen} options={{ title: t('nav.loginActivity') }} />
       <Stack.Screen name="ActivityLog" component={ActivityLogScreen} options={{ title: t('nav.auditLog') }} />
+      <Stack.Screen name="DaySignOffs" component={DaySignOffsScreen} options={{ title: t('signOff.staffSignOffs') }} />
       <Stack.Screen name="HQCommissionItems" component={HQCommissionItemsScreen} options={{ title: t('nav.hqCommissionItems') }} />
       <Stack.Screen name="HQCommissionSettlements" component={HQCommissionSettlementsScreen} options={{ title: t('nav.hqCommissionSettlements') }} />
       <Stack.Screen name="HQCommissionSettlementDetail" component={HQCommissionSettlementDetailScreen} options={{ title: t('nav.hqCommissionDetail') }} />

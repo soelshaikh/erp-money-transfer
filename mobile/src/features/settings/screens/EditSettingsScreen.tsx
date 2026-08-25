@@ -31,10 +31,16 @@ export function EditSettingsScreen({ navigation }: Props) {
     appName: string;
     commissionType: string;
     commissionValue: string;
+    whEnabled: boolean;
+    whStart: string;
+    whEnd: string;
   }>({
     appName: '',
     commissionType: 'flat',
     commissionValue: '',
+    whEnabled: false,
+    whStart: '09:00',
+    whEnd: '18:00',
   });
 
   const { data, isLoading } = useQuery({
@@ -45,10 +51,14 @@ export function EditSettingsScreen({ navigation }: Props) {
 
   useEffect(() => {
     if (!data) return;
+    const wh = (data as any).settings?.workingHours;
     setForm({
       appName: (data as any).branding?.appName || '',
       commissionType: (data as any).settings?.commission?.type || 'flat',
       commissionValue: String((data as any).settings?.commission?.value ?? ''),
+      whEnabled: wh?.enabled === true,
+      whStart: wh?.startTime || '09:00',
+      whEnd: wh?.endTime || '18:00',
     });
   }, [data]);
 
@@ -59,6 +69,11 @@ export function EditSettingsScreen({ navigation }: Props) {
         commission: {
           type: form.commissionType,
           value: parseFloat(form.commissionValue) || 0,
+        },
+        workingHours: {
+          enabled: form.whEnabled,
+          startTime: form.whStart.trim() || '09:00',
+          endTime: form.whEnd.trim() || '18:00',
         },
       },
     }),
@@ -141,6 +156,57 @@ export function EditSettingsScreen({ navigation }: Props) {
           placeholder={t('settings.egValue')}
           keyboardType="decimal-pad"
         />
+
+        <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm, marginTop: theme.spacing.md }]}>
+          {t('signOff.workingHours').toUpperCase()}
+        </Text>
+
+        {/* Enable toggle */}
+        <TouchableOpacity
+          onPress={() => setForm((f) => ({ ...f, whEnabled: !f.whEnabled }))}
+          style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            paddingVertical: theme.spacing.sm, marginBottom: theme.spacing.sm,
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[theme.typography.body, { color: theme.colors.text }]}>{t('signOff.enabled')}</Text>
+          <View style={{
+            width: 44, height: 24, borderRadius: 12,
+            backgroundColor: form.whEnabled ? theme.colors.primary : theme.colors.border,
+            justifyContent: 'center', paddingHorizontal: 2,
+          }}>
+            <View style={{
+              width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff',
+              alignSelf: form.whEnabled ? 'flex-end' : 'flex-start',
+            }} />
+          </View>
+        </TouchableOpacity>
+
+        {form.whEnabled && (
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            <View style={{ flex: 1 }}>
+              <AppInput
+                label={t('signOff.startTime')}
+                value={form.whStart}
+                onChangeText={(v: string) => setForm((f) => ({ ...f, whStart: v }))}
+                placeholder="09:00"
+                keyboardType="numbers-and-punctuation"
+                maxLength={5}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppInput
+                label={t('signOff.endTime')}
+                value={form.whEnd}
+                onChangeText={(v: string) => setForm((f) => ({ ...f, whEnd: v }))}
+                placeholder="18:00"
+                keyboardType="numbers-and-punctuation"
+                maxLength={5}
+              />
+            </View>
+          </View>
+        )}
 
         <AppButton
           title={t('settings.saveBtn')}

@@ -9,7 +9,7 @@ import { AppButton } from '../../../shared/components/AppButton';
 import { LoadingScreen } from '../../../shared/components/LoadingScreen';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
-import { fmtAmt } from '../../../utils/fmt';
+import { fmtAmt, fmtDate } from '../../../utils/fmt';
 import { withAlpha } from '../../../utils/colors';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -313,7 +313,7 @@ export function TenantDetailScreen({ route, navigation }: Props) {
           theme={theme}
         />
         <Divider theme={theme} />
-        <InfoRow label="Registered" value={(tenant as any).createdAt ? new Date((tenant as any).createdAt).toLocaleDateString('en-IN') : '—'} theme={theme} />
+        <InfoRow label="Registered" value={(tenant as any).createdAt ? fmtDate(new Date((tenant as any).createdAt)) : '—'} theme={theme} />
       </AppCard>
 
       <AppCard style={{ marginBottom: theme.spacing.md }}>

@@ -1,5 +1,6 @@
 // Infrastructure — DB models and repositories
 import MongoTenantRepository from './infrastructure/db/repositories/MongoTenantRepository';
+import MongoUserSignOffRepository from './infrastructure/db/repositories/MongoUserSignOffRepository';
 import MongoUserRepository from './infrastructure/db/repositories/MongoUserRepository';
 import MongoBranchRepository from './infrastructure/db/repositories/MongoBranchRepository';
 import MongoTransactionRepository from './infrastructure/db/repositories/MongoTransactionRepository';
@@ -17,6 +18,18 @@ import SocketNotificationService from './infrastructure/services/SocketNotificat
 // Use-cases — Auth
 import Login from './application/use-cases/auth/Login';
 import RefreshToken from './application/use-cases/auth/RefreshToken';
+
+// Use-cases — Sign-off
+import SignOffUser from './application/use-cases/signOff/SignOffUser';
+import GetSignOffStatus from './application/use-cases/signOff/GetSignOffStatus';
+import GetDaySignOffs from './application/use-cases/signOff/GetDaySignOffs';
+import EnableReLogin from './application/use-cases/signOff/EnableReLogin';
+
+// Controllers
+import SignOffController from './interfaces/http/controllers/SignOffController';
+
+// Routes
+import signOffRoutes from './interfaces/http/routes/sign-off.routes';
 
 // Use-cases — Branch
 import CreateBranch from './application/use-cases/branch/CreateBranch';
@@ -161,6 +174,7 @@ import appInstallRoutes from './interfaces/http/routes/app-install.routes';
 export default function buildContainer(io: any) {
   // Repositories
   const tenantRepository = new MongoTenantRepository();
+  const userSignOffRepository = new MongoUserSignOffRepository();
   const userRepository = new MongoUserRepository();
   const branchRepository = new MongoBranchRepository();
   const transactionRepository = new MongoTransactionRepository();
@@ -184,7 +198,7 @@ export default function buildContainer(io: any) {
   const suspendAllSessions = new SuspendAllSessions({ deviceSessionRepository, userRepository, auditService, notificationService });
 
   // Use-cases
-  const loginUseCase = new Login({ userRepository, tenantRepository, branchRepository, auditService, notificationService, createDeviceSession });
+  const loginUseCase = new Login({ userRepository, tenantRepository, branchRepository, auditService, notificationService, createDeviceSession, userSignOffRepository });
   const refreshTokenUseCase = new RefreshToken({ userRepository, tenantRepository, branchRepository, deviceSessionRepository });
 
   const createBranch = new CreateBranch({ branchRepository, tenantRepository, auditService });
@@ -261,6 +275,13 @@ export default function buildContainer(io: any) {
   const completeHQCommissionSettlement = new CompleteHQCommissionSettlement({ hqCommissionSettlementRepository, hqCommissionItemRepository, branchLedgerRepository, branchRepository, auditService });
   const hqCommissionController = new HQCommissionController({ getHQCommissionItems, createHQCommissionSettlement, getHQCommissionSettlements, getHQCommissionSettlement, completeHQCommissionSettlement });
 
+  // Sign-off use-cases
+  const signOffUser    = new SignOffUser({ userSignOffRepository, userRepository });
+  const getSignOffStatus = new GetSignOffStatus({ userSignOffRepository, tenantRepository });
+  const getDaySignOffs = new GetDaySignOffs({ userSignOffRepository });
+  const enableReLogin  = new EnableReLogin({ userSignOffRepository });
+  const signOffController = new SignOffController({ signOffUser, getSignOffStatus, getDaySignOffs, enableReLogin });
+
   const getAuditLogs = new GetAuditLogs();
   const deleteBranch = new DeleteBranch({ branchRepository, notificationService, auditService });
   const suspendUser = new SuspendUser({ userRepository, deviceSessionRepository, notificationService, auditService });
@@ -333,5 +354,7 @@ export default function buildContainer(io: any) {
     commissionSettlementRoutes,
     externalAccountController,
     externalAccountRoutes,
+    signOffController,
+    signOffRoutes,
   };
 }

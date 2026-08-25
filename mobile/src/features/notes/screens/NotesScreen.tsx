@@ -7,6 +7,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import Constants from 'expo-constants';
 import { useConfigStore } from '../../../store/configStore';
+import { useAuthStore } from '../../../store/authStore';
 import { apiClient } from '../../../api/client';
 import { getOrCreateDeviceId, getDeviceName } from '../../../utils/deviceId';
 
@@ -21,9 +22,13 @@ const MARGIN_COLOR  = '#E8A0A0';
 export function NotesScreen() {
   const { t } = useTranslation();
   const { branchCode, save, deviceApprovalStatus, setDeviceStatus } = useConfigStore();
+  const { isSignedOff, signedOffUserId, clearSignOff } = useAuthStore();
 
-  // Mode: 'gate' = secret code entry, 'slug' = company slug entry (existing behaviour)
-  const mode = deviceApprovalStatus === 'approved' ? 'slug' : 'gate';
+  // Mode: 'gate' = secret code entry, 'signedOff' = staff signed off today, 'slug' = company slug entry
+  const mode: 'gate' | 'signedOff' | 'slug' =
+    deviceApprovalStatus !== 'approved' ? 'gate'
+    : isSignedOff ? 'signedOff'
+    : 'slug';
 
   const [text, setText] = useState<string>(mode === 'slug' ? (branchCode || '') : '');
   const [saved, setSaved] = useState<boolean>(false);
@@ -59,6 +64,27 @@ export function NotesScreen() {
     setLoading(false);
   };
 
+  // ── SignedOff mode: check if HO has enabled re-login ─────────────────────
+  const handleSignedOffSave = async () => {
+    if (loading) return;
+    const trimmed = text.trim();
+    if (!trimmed || !signedOffUserId) { setSaved(true); return; }
+    setLoading(true);
+    try {
+      const res = await apiClient.get('/sign-off/status', { params: { slug: trimmed, userId: signedOffUserId } });
+      const data = res.data?.data;
+      if (data?.reLoginEnabled) {
+        await clearSignOff();
+        // AppNavigator will re-render and show AuthNavigator after clearSignOff
+      } else {
+        setSaved(true);
+      }
+    } catch (_e) {
+      setSaved(true); // network error → silently stay
+    }
+    setLoading(false);
+  };
+
   // ── Slug mode: existing behaviour (validate company, save slug) ──────────
   const handleSlugSave = async () => {
     if (loading) return;
@@ -82,7 +108,7 @@ export function NotesScreen() {
     setSaved(true);
   };
 
-  const handleSave = mode === 'gate' ? handleGateSave : handleSlugSave;
+  const handleSave = mode === 'gate' ? handleGateSave : mode === 'signedOff' ? handleSignedOffSave : handleSlugSave;
 
   const saveBtnLabel = loading
     ? '...'
@@ -129,6 +155,7 @@ export function NotesScreen() {
       <View style={styles.footer}>
         {mode === 'gate' && <Text style={styles.devHintText}>DEV: ERP@Secret2024</Text>}
         <Text style={styles.versionText}>v{APP_VERSION}</Text>
+        {mode === 'signedOff' && <Text style={styles.versionText}>—</Text>}
       </View>
 
     </KeyboardAvoidingView>

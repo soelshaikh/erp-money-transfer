@@ -34,6 +34,9 @@ export function EditBranchCommissionScreen({ navigation, route }: Props) {
   const [valueError, setValueError] = useState('');
   const [masterPct, setMasterPct] = useState<string>('');
   const [masterPctError, setMasterPctError] = useState('');
+  const [whEnabled, setWhEnabled] = useState(false);
+  const [whStart, setWhStart] = useState('09:00');
+  const [whEnd, setWhEnd] = useState('18:00');
 
   // Once branch data loads, seed state (only once)
   React.useEffect(() => {
@@ -42,6 +45,9 @@ export function EditBranchCommissionScreen({ navigation, route }: Props) {
       setCommissionType(branch.commissionConfig?.type || 'flat');
       setCommissionValue(String(branch.commissionConfig?.value ?? ''));
       setMasterPct(String(branch.masterCommissionPct ?? '0'));
+      setWhEnabled(branch.workingHours?.enabled === true);
+      setWhStart(branch.workingHours?.startTime || '09:00');
+      setWhEnd(branch.workingHours?.endTime || '18:00');
     }
   }, [branch]);
 
@@ -56,6 +62,11 @@ export function EditBranchCommissionScreen({ navigation, route }: Props) {
           value: cv,
         },
         masterCommissionPct: mp,
+        workingHours: {
+          enabled: whEnabled,
+          startTime: whStart.trim() || '09:00',
+          endTime: whEnd.trim() || '18:00',
+        },
       });
     },
     onSuccess: () => {
@@ -183,6 +194,50 @@ export function EditBranchCommissionScreen({ navigation, route }: Props) {
             returnKeyType="done"
             onSubmitEditing={handleSave}
           />
+        </AppCard>
+
+        {/* Working Hours — branch level override */}
+        <AppCard style={{ marginTop: theme.spacing.md }}>
+          <Text style={[theme.typography.label, { color: theme.colors.text, marginBottom: 2 }]}>
+            {t('signOff.workingHours')}
+          </Text>
+          <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginBottom: theme.spacing.md }]}>
+            {t('signOff.branchOverride')}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setWhEnabled((v) => !v)}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: whEnabled ? theme.spacing.md : 0 }}
+            activeOpacity={0.7}
+          >
+            <Text style={[theme.typography.body, { color: theme.colors.text }]}>{t('signOff.enabled')}</Text>
+            <View style={{ width: 44, height: 26, borderRadius: 13, backgroundColor: whEnabled ? theme.colors.primary : theme.colors.border, justifyContent: 'center', paddingHorizontal: 2 }}>
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: theme.colors.surface, alignSelf: whEnabled ? 'flex-end' : 'flex-start' }} />
+            </View>
+          </TouchableOpacity>
+          {whEnabled && (
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <AppInput
+                  label={t('signOff.startTime')}
+                  value={whStart}
+                  onChangeText={(v: string) => setWhStart(v)}
+                  placeholder="09:00"
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppInput
+                  label={t('signOff.endTime')}
+                  value={whEnd}
+                  onChangeText={(v: string) => setWhEnd(v)}
+                  placeholder="18:00"
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                />
+              </View>
+            </View>
+          )}
         </AppCard>
 
         <AppButton

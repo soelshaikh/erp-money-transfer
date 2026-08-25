@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
@@ -8,6 +8,7 @@ import { useTheme } from '../../../theme/TenantThemeProvider';
 import { useAuthStore } from '../../../store/authStore';
 import { useLangStore } from '../../../store/langStore';
 import { settingsApi } from '../api/settingsApi';
+import { signOffApi } from '../../signOff/api/signOffApi';
 import { AppCard } from '../../../shared/components/AppCard';
 import { AppButton } from '../../../shared/components/AppButton';
 import { LoadingScreen } from '../../../shared/components/LoadingScreen';
@@ -33,7 +34,8 @@ export function SettingsScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
-  const { user, tenant, logout } = useAuthStore();
+  const { user, tenant, logout, signOff } = useAuthStore();
+  const [signingOff, setSigningOff] = useState(false);
   const { lang, setLang } = useLangStore();
   const isHeadOffice = (user as any)?.role === 'head_office';
   const isBranch = (user as any)?.role === 'branch';
@@ -49,6 +51,28 @@ export function SettingsScreen() {
       { text: t('common.cancel'), style: 'cancel' },
       { text: t('common.signOut'), style: 'destructive', onPress: logout },
     ]);
+  };
+
+  const confirmSignOff = () => {
+    Alert.alert(
+      t('signOff.title'),
+      t('signOff.confirm'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('signOff.title'),
+          style: 'destructive',
+          onPress: async () => {
+            if (signingOff) return;
+            setSigningOff(true);
+            try {
+              await signOffApi.signOff();
+            } catch (_e) { /* ignore — still sign off locally */ }
+            await signOff((user as any)?._id || (user as any)?.id || '');
+          },
+        },
+      ]
+    );
   };
 
   if (isLoading) return <LoadingScreen />;
@@ -259,6 +283,20 @@ export function SettingsScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
               </TouchableOpacity>
+              <View style={{ height: 1, backgroundColor: theme.colors.divider }} />
+              <TouchableOpacity
+                onPress={() => navigation.navigate('DaySignOffs')}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: theme.spacing.md, gap: theme.spacing.sm }}
+              >
+                <Ionicons name="moon-outline" size={20} color={theme.colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[theme.typography.label, { color: theme.colors.text }]}>{t('signOff.staffSignOffs')}</Text>
+                  <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}>
+                    {t('signOff.staffSignOffsHint')}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
             </>
           )}
         </AppCard>
@@ -269,6 +307,14 @@ export function SettingsScreen() {
           title={t('settings.editSettings')}
           onPress={() => navigation.navigate('EditSettings')}
           style={{ marginBottom: theme.spacing.sm }}
+        />
+      )}
+      {isBranch && (
+        <AppButton
+          title={signingOff ? '...' : t('signOff.title')}
+          onPress={confirmSignOff}
+          variant="outline"
+          style={{ marginBottom: theme.spacing.sm, borderColor: theme.colors.warning }}
         />
       )}
       <AppButton title={t('common.signOut')} onPress={confirmLogout} variant="outline" />

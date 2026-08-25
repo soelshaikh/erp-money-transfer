@@ -16,7 +16,7 @@ import { LoadingScreen } from '../../../shared/components/LoadingScreen';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
 import { withAlpha } from '../../../utils/colors';
-import { fmtAmt, fmtAmtSigned } from '../../../utils/fmt';
+import { fmtAmt, fmtAmtSigned, fmtDateShort } from '../../../utils/fmt';
 import { hqCommissionApi } from '../../hqCommission/api/hqCommissionApi';
 
 interface RecentTxnTableProps {
@@ -213,9 +213,8 @@ function isSameDay(a: Date, b: Date) {
 function formatDateLabel(from: Date, to: Date, todayLabel?: string): string {
   const today = new Date();
   if (isSameDay(from, to) && isSameDay(from, today)) return todayLabel ?? 'Today';
-  const opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
-  const f = from.toLocaleDateString('en-IN', opts);
-  const t = to.toLocaleDateString('en-IN', opts);
+  const f = fmtDateShort(from);
+  const t = fmtDateShort(to);
   return isSameDay(from, to) ? f : `${f} — ${t}`;
 }
 
@@ -265,6 +264,14 @@ export function DashboardScreen() {
     enabled: isBranchUser || isHOUser,
   });
   const hqPendingCount = (hqPendingItems as any[]).length;
+
+  const { data: hqPendingSettlementsData } = useQuery({
+    queryKey: ['hqCommissionSettlements', 'pending'],
+    queryFn: () => hqCommissionApi.listSettlements({ status: 'pending', limit: 50 }),
+    enabled: isHOUser,
+  });
+  const hqPendingSettlements = ((hqPendingSettlementsData as any)?.data ?? []) as any[];
+  const hqPendingSettlementsCount = hqPendingSettlements.length;
 
   if (isLoading) return <LoadingScreen message={t('dash.loading')} />;
 
@@ -499,6 +506,29 @@ export function DashboardScreen() {
             </AppCard>
           </TouchableOpacity>
         )}
+
+        {isHOUser && hqPendingSettlementsCount > 0 && (
+          <TouchableOpacity
+            activeOpacity={0.75}
+            onPress={() => navigation.navigate('HQCommissionSettlements')}
+            style={{ marginTop: theme.spacing.md }}
+          >
+            <AppCard style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: withAlpha(theme.colors.warning, 0.12), alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="time-outline" size={18} color={theme.colors.warning} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[theme.typography.label, { color: theme.colors.warning, fontWeight: '700' }]}>
+                  {t('hqComm.pendingSettlements')}
+                </Text>
+                <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+                  {hqPendingSettlementsCount} {t('hqComm.settlementsAwaitingApproval')}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
+            </AppCard>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* Date range picker modal */}
@@ -581,7 +611,7 @@ export function DashboardScreen() {
                 >
                   <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginBottom: 2 }]}>{t('dash.from')}</Text>
                   <Text style={[theme.typography.label, { color: theme.colors.primary }]} allowFontScaling={false}>
-                    {tempFrom.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                    {fmtDateShort(tempFrom)}
                   </Text>
                 </TouchableOpacity>
 
@@ -605,7 +635,7 @@ export function DashboardScreen() {
                 >
                   <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginBottom: 2 }]}>{t('dash.to')}</Text>
                   <Text style={[theme.typography.label, { color: theme.colors.primary }]} allowFontScaling={false}>
-                    {tempTo.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                    {fmtDateShort(tempTo)}
                   </Text>
                 </TouchableOpacity>
               </View>

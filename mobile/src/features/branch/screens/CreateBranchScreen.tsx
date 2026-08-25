@@ -37,6 +37,9 @@ export function CreateBranchScreen({ navigation }: Props) {
     contactPerson: string;
     city: string;
     state: string;
+    whEnabled: boolean;
+    whStart: string;
+    whEnd: string;
   }>({
     name: '',
     code: '',
@@ -44,6 +47,9 @@ export function CreateBranchScreen({ navigation }: Props) {
     contactPerson: '',
     city: '',
     state: '',
+    whEnabled: false,
+    whStart: '09:00',
+    whEnd: '18:00',
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
@@ -55,6 +61,11 @@ export function CreateBranchScreen({ navigation }: Props) {
       contactPerson: form.contactPerson.trim(),
       ...(form.city.trim() && { city: form.city.trim() }),
       ...(form.state.trim() && { state: form.state.trim() }),
+      workingHours: {
+        enabled: form.whEnabled,
+        startTime: form.whStart.trim() || '09:00',
+        endTime: form.whEnd.trim() || '18:00',
+      },
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
@@ -182,6 +193,45 @@ export function CreateBranchScreen({ navigation }: Props) {
           onSubmitEditing={handleSubmit}
           onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100)}
         />
+
+        {/* Working Hours */}
+        <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm, marginTop: theme.spacing.md }]}>
+          {t('signOff.workingHours').toUpperCase()}
+        </Text>
+        <TouchableOpacity
+          onPress={() => setForm((f) => ({ ...f, whEnabled: !f.whEnabled }))}
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: theme.spacing.sm, marginBottom: theme.spacing.sm }}
+          activeOpacity={0.7}
+        >
+          <Text style={[theme.typography.body, { color: theme.colors.text }]}>{t('signOff.enabled')}</Text>
+          <View style={{ width: 44, height: 24, borderRadius: 12, backgroundColor: form.whEnabled ? theme.colors.primary : theme.colors.border, justifyContent: 'center', paddingHorizontal: 2 }}>
+            <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', alignSelf: form.whEnabled ? 'flex-end' : 'flex-start' }} />
+          </View>
+        </TouchableOpacity>
+        {form.whEnabled && (
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            <View style={{ flex: 1 }}>
+              <AppInput
+                label={t('signOff.startTime')}
+                value={form.whStart}
+                onChangeText={(v: string) => setForm((f) => ({ ...f, whStart: v }))}
+                placeholder="09:00"
+                keyboardType="numbers-and-punctuation"
+                maxLength={5}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppInput
+                label={t('signOff.endTime')}
+                value={form.whEnd}
+                onChangeText={(v: string) => setForm((f) => ({ ...f, whEnd: v }))}
+                placeholder="18:00"
+                keyboardType="numbers-and-punctuation"
+                maxLength={5}
+              />
+            </View>
+          </View>
+        )}
 
         <AppButton
           title={t('branch.createBtn')}

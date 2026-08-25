@@ -365,6 +365,8 @@
     processing: 'Processing...',
     pendingItems: 'HQ Commission બાકી',
     awaitingSettlement: 'settlement બાકી',
+    pendingSettlements: 'HQ Commission Settlements',
+    settlementsAwaitingApproval: 'settlements મંજૂરી માટે બાકી',
   },
 
   ledger: {
@@ -546,6 +548,28 @@
     inactive: 'બંધ',
     branchLimit: 'શાખા મર્યાદા',
     staffLimit: 'કર્મચારી મર્યાદા',
+  },
+
+  signOff: {
+    title: 'સાઇન ઓફ',
+    confirm: 'આજ માટે સાઇન ઓફ કરો? ફરી login માટે HO ની મંજૂરી જોઈશે.',
+    staffSignOffs: 'કર્મચારી સાઇન ઓફ',
+    staffSignOffsHint: 'આજ સાઇન ઓફ થયેલ કર્મચારી',
+    enableTitle: 'Login ચાલુ કરો',
+    enableConfirm: '{{name}} ને આજ ફરી login ની મંજૂરી આપો?',
+    enableBtn: 'ચાલુ કરો',
+    enableFailed: 'login ચાલુ ન થઈ. ફરી કોશિશ કરો.',
+    reLoginEnabled: 'Login ચાલુ',
+    signedOffAt: 'સાઇન ઓફ સમય',
+    enabledBy: 'ચાલુ કર્યા',
+    noneToday: 'આજ કોઈ સાઇન ઓફ નથી',
+    todayDate: 'તારીખ',
+    workingHours: 'કામના કલાક',
+    startTime: 'શરૂ સમય',
+    endTime: 'બંધ સમય',
+    enabled: 'ચાલુ',
+    branchOverride: 'શાખા-ચોક્કસ (કંપની override)',
+    companyLevel: 'કંપની-સ્તર ડિફૉલ્ટ',
   },
 } as const;
 

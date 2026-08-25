@@ -29,7 +29,7 @@ function SocketManager() {
  *   else                              → AuthNavigator (Login)
  */
 export function AppNavigator() {
-  const { isAuthenticated, isLoading: authLoading, finishLoading, pendingDeviceInfo } = useAuthStore();
+  const { isAuthenticated, isLoading: authLoading, finishLoading, pendingDeviceInfo, isSignedOff, loadSignOffState } = useAuthStore();
   const { isConfigured, isDeviceApproved, isLoading: configLoading, load: loadConfig } = useConfigStore();
   const loadLang = useLangStore((s) => s.load);
 
@@ -37,6 +37,7 @@ export function AppNavigator() {
     loadConfig();
     finishLoading();
     loadLang();
+    loadSignOffState();
     getOrCreateDeviceId().catch(() => {});
   }, []);
 
@@ -51,6 +52,11 @@ export function AppNavigator() {
 
   // Device approved but company slug not yet configured — show slug entry (existing NotesScreen behaviour)
   if (!isConfigured) {
+    return <NotesScreen />;
+  }
+
+  // Staff has signed off for today — show NotesScreen in sign-off mode
+  if (isSignedOff) {
     return <NotesScreen />;
   }
 

@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { queryClient } from '../api/queryClient';
+
+const SIGN_OFF_KEY = 'sign_off_state'; // JSON: { date, userId }
 
 interface PendingDeviceInfo {
   deviceStatus: string;
@@ -15,6 +18,11 @@ interface AuthState {
   isLoading: boolean;
   pendingDeviceInfo: PendingDeviceInfo | null;
   pendingLoginParams: any | null;
+  // Sign-off state
+  isSignedOff: boolean;
+  signedOffDate: string | null;   // YYYY-MM-DD IST
+  signedOffUserId: string | null;
+  // Actions
   login: (userData: any, tenantData: any, accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
   setLoading: (isLoading: boolean) => void;
@@ -23,6 +31,13 @@ interface AuthState {
   setPendingDevice: (deviceStatus: string, user: any, tenant: any) => void;
   setPendingLoginParams: (params: any) => void;
   clearPendingDevice: () => void;
+  signOff: (userId: string) => Promise<void>;
+  clearSignOff: () => Promise<void>;
+  loadSignOffState: () => Promise<void>;
+}
+
+function todayIST(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -32,18 +47,24 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
   pendingDeviceInfo: null,
   pendingLoginParams: null,
+  isSignedOff: false,
+  signedOffDate: null,
+  signedOffUserId: null,
 
   login: async (userData: any, tenantData: any, accessToken: string, refreshToken: string) => {
     await SecureStore.setItemAsync('accessToken', accessToken);
     await SecureStore.setItemAsync('refreshToken', refreshToken);
-    set({ user: userData, tenant: tenantData, isAuthenticated: true, isLoading: false, pendingDeviceInfo: null, pendingLoginParams: null });
+    // Clear any lingering sign-off state on successful login
+    await AsyncStorage.removeItem(SIGN_OFF_KEY);
+    set({ user: userData, tenant: tenantData, isAuthenticated: true, isLoading: false, pendingDeviceInfo: null, pendingLoginParams: null, isSignedOff: false, signedOffDate: null, signedOffUserId: null });
   },
 
   logout: async () => {
     await SecureStore.deleteItemAsync('accessToken');
     await SecureStore.deleteItemAsync('refreshToken');
+    await AsyncStorage.removeItem(SIGN_OFF_KEY);
     queryClient.clear();
-    set({ user: null, tenant: null, isAuthenticated: false, isLoading: false, pendingDeviceInfo: null, pendingLoginParams: null });
+    set({ user: null, tenant: null, isAuthenticated: false, isLoading: false, pendingDeviceInfo: null, pendingLoginParams: null, isSignedOff: false, signedOffDate: null, signedOffUserId: null });
   },
 
   setLoading: (isLoading: boolean) => set({ isLoading }),
@@ -61,4 +82,37 @@ export const useAuthStore = create<AuthState>((set) => ({
   setPendingLoginParams: (params: any) => set({ pendingLoginParams: params }),
 
   clearPendingDevice: () => set({ pendingDeviceInfo: null, pendingLoginParams: null }),
+
+  signOff: async (userId: string) => {
+    const date = todayIST();
+    await SecureStore.deleteItemAsync('accessToken');
+    await SecureStore.deleteItemAsync('refreshToken');
+    queryClient.clear();
+    await AsyncStorage.setItem(SIGN_OFF_KEY, JSON.stringify({ date, userId }));
+    set({
+      user: null, tenant: null, isAuthenticated: false, isLoading: false,
+      pendingDeviceInfo: null, pendingLoginParams: null,
+      isSignedOff: true, signedOffDate: date, signedOffUserId: userId,
+    });
+  },
+
+  clearSignOff: async () => {
+    await AsyncStorage.removeItem(SIGN_OFF_KEY);
+    set({ isSignedOff: false, signedOffDate: null, signedOffUserId: null });
+  },
+
+  loadSignOffState: async () => {
+    try {
+      const raw = await AsyncStorage.getItem(SIGN_OFF_KEY);
+      if (!raw) return;
+      const { date, userId } = JSON.parse(raw);
+      const today = todayIST();
+      if (date !== today) {
+        // Sign-off expired — new day
+        await AsyncStorage.removeItem(SIGN_OFF_KEY);
+        return;
+      }
+      set({ isSignedOff: true, signedOffDate: date, signedOffUserId: userId });
+    } catch { /* ignore */ }
+  },
 }));
