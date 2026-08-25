@@ -253,7 +253,8 @@ export default class MongoTransactionRepository extends ITransactionRepository {
         .limit(limit)
         .populate('collectionBranchId', 'name code')
         .populate('payoutBranchId', 'name code')
-        .select('tokenNumber amount commissionAmount commissionType commissionValue finalAmount createdAt approvalStatus paymentStatus collectionBranchId payoutBranchId')
+        .populate('commissionSplit.otherBranchId', 'name code')
+        .select('tokenNumber amount commissionAmount commissionType commissionValue finalAmount createdAt approvalStatus paymentStatus collectionBranchId payoutBranchId commissionSplit')
         .lean(),
       TransactionModel.countDocuments(query),
       TransactionModel.aggregate([

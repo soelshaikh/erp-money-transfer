@@ -9,6 +9,10 @@ export const tenantApi = {
   updateBranchLimit: (id: string, branchLimit: number) => apiClient.patch(`/tenants/${id}/branch-limit`, { branchLimit }).then((r) => r.data.data),
   updateCommission: (id: string, commission: { type: string; value: number }) =>
     apiClient.patch(`/tenants/${id}/commission`, { commission }).then((r) => r.data),
+  updateBusinessType: (id: string, businessType: string) =>
+    apiClient.patch(`/tenants/${id}/business-type`, { businessType }).then((r) => r.data),
+  updateCommissionSplit: (id: string, commissionSplit: { branchPct: number; headOfficePct: number }) =>
+    apiClient.patch(`/tenants/${id}/commission-split`, { commissionSplit }).then((r) => r.data),
   resetDevData: () => apiClient.delete('/tenants/reset-dev-data').then((r) => r.data.data),
   updateStaffLimit: (id: string, staffLimit: number) => apiClient.patch(`/tenants/${id}/staff-limit`, { staffLimit }).then((r) => r.data.data),
   updateTransactionLimits: (id: string, limits: { maxAmountPerTransaction?: number; dailyLimitPerBranch?: number }) =>

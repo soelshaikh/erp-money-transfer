@@ -74,6 +74,8 @@ export function BranchLedgerScreen({ route }: Props) {
     commission_receivable: { label: 'Commission Receivable', icon: 'swap-horizontal-outline', affectsLabel: 'Effective Only', isActual: false },
     commission_settlement_out: { label: 'Commission Settled (Out)', icon: 'arrow-up-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
     commission_settlement_in: { label: 'Commission Settled (In)', icon: 'arrow-down-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    hq_commission_out: { label: 'HQ Commission Settled', icon: 'arrow-up-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    hq_commission_in: { label: 'HQ Commission Received', icon: 'arrow-down-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
   };
 
   const [page, setPage] = useState(1);

@@ -19,6 +19,11 @@ export interface HQCommissionItemDoc {
   commissionAmount: number;
   hqSharePct: number;
   hqShareAmount: number;
+  otherBranchId: Types.ObjectId | null;
+  otherBranchName: string | null;
+  otherBranchCode: string | null;
+  otherBranchShareAmount: number;
+  headOfficeOwnShareAmount: number;
   status: HQCommissionItemStatus;
   settlementId: Types.ObjectId | null;
   createdAt: Date;
@@ -65,6 +70,11 @@ export interface HQCommissionItemCreateData {
   commissionAmount: number;
   hqSharePct: number;
   hqShareAmount: number;
+  otherBranchId?: Types.ObjectId | string | null;
+  otherBranchName?: string | null;
+  otherBranchCode?: string | null;
+  otherBranchShareAmount?: number;
+  headOfficeOwnShareAmount?: number;
 }
 
 export interface HQCommissionSettlementCreateData {

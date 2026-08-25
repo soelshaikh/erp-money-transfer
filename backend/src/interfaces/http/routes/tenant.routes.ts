@@ -24,6 +24,8 @@ export default function tenantRoutes(tenantController: any) {
   router.patch('/:id/staff-limit', validate('updateTenantStaffLimit'), tenantController.updateStaffLimit);
   router.patch('/:id/transaction-limits', validate('updateTenantTransactionLimits'), tenantController.updateTransactionLimits);
   router.patch('/:id/commission', validate('updateTenantCommission'), tenantController.updateCommission);
+  router.patch('/:id/business-type', validate('updateTenantBusinessType'), tenantController.updateBusinessType);
+  router.patch('/:id/commission-split', validate('updateTenantCommissionSplit'), tenantController.updateCommissionSplit);
   router.patch('/:id/export-formats', tenantController.updateExportFormats);
   router.patch('/:id/credit-commission-flag', tenantController.updateCreditCommissionFlag);
   router.patch('/:id/device-approval', tenantController.updateDeviceApproval);

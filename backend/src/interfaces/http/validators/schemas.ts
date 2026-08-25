@@ -1,9 +1,19 @@
 import Joi from 'joi';
-import { ROLES, COMMISSION_TYPE, PAYMENT_METHOD, COMMISSION_SIDE } from '../../../config/constants';
+import { ROLES, COMMISSION_TYPE, PAYMENT_METHOD, COMMISSION_SIDE, BUSINESS_TYPE } from '../../../config/constants';
 import { BRANCH_TYPES } from '../../../domain/entities/Branch';
 
 const objectId = Joi.string().hex().length(24);
 const hhmm = Joi.string().pattern(/^\d{2}:\d{2}$/);
+
+const commissionSplit = Joi.object({
+  branchPct: Joi.number().min(0).max(50).required(),
+  headOfficePct: Joi.number().min(0).max(100).required(),
+}).custom((value, helpers) => {
+  if (2 * value.branchPct + value.headOfficePct !== 100) {
+    return helpers.message('2× Branch % + Head Office % must equal 100');
+  }
+  return value;
+});
 
 export const schemas: Record<string, Joi.Schema> = {
   // Auth
@@ -98,6 +108,7 @@ export const schemas: Record<string, Joi.Schema> = {
     collectionPhotoUrl: Joi.string().uri().optional().allow('', null),
     customerTokenNo: Joi.string().max(100).optional().allow('', null),
     externalAccountId: objectId.optional().allow(null),
+    payoutExternalAccountId: objectId.optional().allow(null),
     commissionOverride: Joi.object({
       type: Joi.string().valid(...Object.values(COMMISSION_TYPE)).required(),
       value: Joi.number().min(0).required(),
@@ -119,6 +130,7 @@ export const schemas: Record<string, Joi.Schema> = {
     contactEmail: Joi.string().email().optional().allow(''),
     address: Joi.string().max(300).optional().allow(''),
     branchLimit: Joi.number().integer().min(1).max(9999).required(),
+    businessType: Joi.string().valid(...Object.values(BUSINESS_TYPE)).required(),
     branding: Joi.object({
       appName: Joi.string().max(100).optional(),
       logoUrl: Joi.string().uri().optional().allow(''),
@@ -149,6 +161,14 @@ export const schemas: Record<string, Joi.Schema> = {
       type: Joi.string().valid('flat', 'percentage').required(),
       value: Joi.number().min(0).required(),
     }).required(),
+  }),
+
+  updateTenantBusinessType: Joi.object({
+    businessType: Joi.string().valid(...Object.values(BUSINESS_TYPE)).required(),
+  }),
+
+  updateTenantCommissionSplit: Joi.object({
+    commissionSplit: commissionSplit.required(),
   }),
 
   createHeadOfficeUser: Joi.object({
@@ -182,6 +202,7 @@ export const schemas: Record<string, Joi.Schema> = {
         type: Joi.string().valid(...Object.values(COMMISSION_TYPE)),
         value: Joi.number().min(0),
       }),
+      commissionSplit,
       timezone: Joi.string().max(50),
       loginTimeRestriction: Joi.boolean(),
       transactionLimits: Joi.object({

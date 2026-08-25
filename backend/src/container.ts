@@ -212,7 +212,7 @@ export default function buildContainer(io: any) {
   const getUsers = new GetUsers({ userRepository, tenantRepository });
   const resetPassword = new ResetPassword({ userRepository, auditService });
 
-  const createTransaction = new CreateTransaction({ transactionRepository, branchRepository, tenantRepository, notificationService, auditService, branchLedgerRepository, commissionPayableRepository });
+  const createTransaction = new CreateTransaction({ transactionRepository, branchRepository, tenantRepository, notificationService, auditService, branchLedgerRepository, commissionPayableRepository, hqCommissionItemRepository });
   const approveTransaction = new ApproveTransaction({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository, commissionPayableRepository });
   const rejectTransaction = new RejectTransaction({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository, commissionPayableRepository });
   const completePayment = new CompletePayment({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository, tenantRepository, commissionPayableRepository, hqCommissionItemRepository });

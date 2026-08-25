@@ -43,29 +43,40 @@ function AuditRow({ icon, label, name, time, color, theme }: {
 function LineItemRow({ item, theme, t }: { item: HQCommissionItem; theme: any; t: any }) {
   return (
     <View style={{
-      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
       paddingVertical: theme.spacing.sm,
       borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
     }}>
-      <View style={{ flex: 1 }}>
-        <Text
-          style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '700', fontFamily: Platform.select({ ios: 'Courier New', android: 'monospace' }) }]}
-          allowFontScaling={false}
-        >
-          {item.tokenNumber}
-        </Text>
-        <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
-          {t('hqComm.totalCommission')}: {fmtAmt(item.commissionAmount)}
-        </Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={{ flex: 1 }}>
+          <Text
+            style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '700', fontFamily: Platform.select({ ios: 'Courier New', android: 'monospace' }) }]}
+            allowFontScaling={false}
+          >
+            {item.tokenNumber}
+          </Text>
+          <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+            {t('hqComm.totalCommission')}: {fmtAmt(item.commissionAmount)}
+          </Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+            {item.hqSharePct}% {t('hqComm.hqShare')}
+          </Text>
+          <Text style={[theme.typography.body, { color: theme.colors.error, fontWeight: '700' }]} allowFontScaling={false}>
+            {fmtAmt(item.hqShareAmount)}
+          </Text>
+        </View>
       </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
-          {item.hqSharePct}% {t('hqComm.hqShare')}
-        </Text>
-        <Text style={[theme.typography.body, { color: theme.colors.error, fontWeight: '700' }]} allowFontScaling={false}>
-          {fmtAmt(item.hqShareAmount)}
-        </Text>
-      </View>
+      {!!item.otherBranchId && (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: theme.spacing.xs }}>
+          <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+            Owed to {item.otherBranchName || 'other branch'} / HO's own
+          </Text>
+          <Text style={[theme.typography.caption, { color: theme.colors.text }]} allowFontScaling={false}>
+            {fmtAmt(item.otherBranchShareAmount || 0)} / {fmtAmt(item.headOfficeOwnShareAmount || 0)}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }

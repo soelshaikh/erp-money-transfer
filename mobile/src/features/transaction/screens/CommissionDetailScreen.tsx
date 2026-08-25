@@ -97,6 +97,25 @@ export function CommissionDetailScreen({ route }: Props) {
             <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>{payoutBranch}</Text>
           </View>
         </View>
+
+        {/* Enterprise commission split breakdown */}
+        {item.commissionSplit && (
+          <View style={{
+            flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4,
+            marginTop: theme.spacing.sm, paddingTop: theme.spacing.sm,
+            borderTopWidth: 1, borderTopColor: theme.colors.divider,
+          }}>
+            <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]} allowFontScaling={false}>
+              Own {fmtAmt(item.commissionSplit.ownShareAmount)}
+            </Text>
+            <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]} allowFontScaling={false}>
+              {item.commissionSplit.otherBranchId?.name || item.commissionSplit.otherBranchId || 'Other'} {fmtAmt(item.commissionSplit.otherBranchShareAmount)}
+            </Text>
+            <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]} allowFontScaling={false}>
+              HO {fmtAmt(item.commissionSplit.headOfficeOwnShareAmount)}
+            </Text>
+          </View>
+        )}
       </AppCard>
     );
   };

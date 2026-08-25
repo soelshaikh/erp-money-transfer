@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Alert, TextInput, TouchableOpacity } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
@@ -8,6 +8,9 @@ import { AppButton } from '../../../shared/components/AppButton';
 import { AppInput } from '../../../shared/components/AppInput';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
+import { withAlpha } from '../../../utils/colors';
+
+type BusinessType = 'enterprise' | 'aangadia';
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
 
@@ -25,8 +28,8 @@ export function RegisterCompanyScreen({ navigation }: Props) {
   const branchLimitRef = useRef<TextInput>(null);
   const addressRef = useRef<TextInput>(null);
 
-  const [form, setForm] = useState<{ name: string; slug: string; address: string; branchLimit: string }>({
-    name: '', slug: '', address: '', branchLimit: '',
+  const [form, setForm] = useState<{ name: string; slug: string; address: string; branchLimit: string; businessType: BusinessType }>({
+    name: '', slug: '', address: '', branchLimit: '', businessType: 'enterprise',
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
@@ -36,6 +39,7 @@ export function RegisterCompanyScreen({ navigation }: Props) {
         name: form.name,
         slug: form.slug,
         branchLimit: parseInt(form.branchLimit, 10),
+        businessType: form.businessType,
       };
       if (form.address.trim()) payload.address = form.address.trim();
       return tenantApi.create(payload);
@@ -115,6 +119,47 @@ export function RegisterCompanyScreen({ navigation }: Props) {
           returnKeyType="next"
           onSubmitEditing={() => addressRef.current?.focus()}
         />
+
+        <Text style={[theme.typography.label, { color: theme.colors.text, marginBottom: theme.spacing.xs }]}>
+          Business Type
+        </Text>
+        <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginBottom: theme.spacing.md }}>
+          <TouchableOpacity
+            onPress={() => setForm((f) => ({ ...f, businessType: 'enterprise' }))}
+            style={{
+              flex: 1,
+              padding: theme.spacing.md,
+              borderRadius: theme.borderRadius.md,
+              borderWidth: 1.5,
+              borderColor: form.businessType === 'enterprise' ? theme.colors.primary : theme.colors.divider,
+              backgroundColor: form.businessType === 'enterprise' ? withAlpha(theme.colors.primary, 0.08) : theme.colors.surface,
+              alignItems: 'center',
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[theme.typography.label, { color: form.businessType === 'enterprise' ? theme.colors.primary : theme.colors.textSecondary }]}>
+              Enterprise
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setForm((f) => ({ ...f, businessType: 'aangadia' }))}
+            style={{
+              flex: 1,
+              padding: theme.spacing.md,
+              borderRadius: theme.borderRadius.md,
+              borderWidth: 1.5,
+              borderColor: form.businessType === 'aangadia' ? theme.colors.primary : theme.colors.divider,
+              backgroundColor: form.businessType === 'aangadia' ? withAlpha(theme.colors.primary, 0.08) : theme.colors.surface,
+              alignItems: 'center',
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[theme.typography.label, { color: form.businessType === 'aangadia' ? theme.colors.primary : theme.colors.textSecondary }]}>
+              Aangadia
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <AppInput
           ref={addressRef}
           label="Address (optional)"

@@ -158,6 +158,30 @@ export function HQCommissionItemsScreen({ navigation }: Props) {
                   </Text>
                 </View>
               </View>
+              {!!item.otherBranchId && (
+                <View style={{
+                  flexDirection: 'row', justifyContent: 'space-between',
+                  marginTop: theme.spacing.xs, paddingTop: theme.spacing.xs,
+                  borderTopWidth: 1, borderTopColor: theme.colors.divider,
+                }}>
+                  <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+                    Owed to {item.otherBranchName || 'other branch'}
+                  </Text>
+                  <Text style={[theme.typography.caption, { color: theme.colors.text, fontWeight: '600' }]} allowFontScaling={false}>
+                    {fmtAmt(item.otherBranchShareAmount || 0)}
+                  </Text>
+                </View>
+              )}
+              {!!item.otherBranchId && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+                    HO's own share
+                  </Text>
+                  <Text style={[theme.typography.caption, { color: theme.colors.text, fontWeight: '600' }]} allowFontScaling={false}>
+                    {fmtAmt(item.headOfficeOwnShareAmount || 0)}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </AppCard>

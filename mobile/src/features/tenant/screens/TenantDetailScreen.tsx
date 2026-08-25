@@ -65,6 +65,12 @@ export function TenantDetailScreen({ route, navigation }: Props) {
   const [commValue, setCommValue] = useState('');
   const commValueRef = useRef<TextInput>(null);
 
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [splitBranchPct, setSplitBranchPct] = useState('');
+  const [splitHeadOfficePct, setSplitHeadOfficePct] = useState('');
+  const splitBranchRef = useRef<TextInput>(null);
+  const splitHoRef = useRef<TextInput>(null);
+
   const [showTxnLimitsModal, setShowTxnLimitsModal] = useState(false);
   const [maxAmountPerTxn, setMaxAmountPerTxn] = useState('');
   const [dailyLimitPerBranch, setDailyLimitPerBranch] = useState('');
@@ -99,6 +105,12 @@ export function TenantDetailScreen({ route, navigation }: Props) {
     mutationFn: (status: string) => tenantApi.updateStatus(tenantId, status),
     onSuccess: invalidate,
     onError: (e: any) => Alert.alert('Error', parseApiError(e) ?? 'Failed to update status'),
+  });
+
+  const businessTypeMutation = useMutation({
+    mutationFn: (businessType: string) => tenantApi.updateBusinessType(tenantId, businessType),
+    onSuccess: invalidate,
+    onError: (e: any) => Alert.alert('Error', parseApiError(e) ?? 'Failed to update business type'),
   });
 
   const branchLimitMutation = useMutation({
@@ -142,6 +154,16 @@ export function TenantDetailScreen({ route, navigation }: Props) {
       setCommValue('');
     },
     onError: (e: any) => Alert.alert('Error', parseApiError(e) ?? 'Failed to update commission'),
+  });
+
+  const commissionSplitMutation = useMutation({
+    mutationFn: (commissionSplit: { branchPct: number; headOfficePct: number }) =>
+      tenantApi.updateCommissionSplit(tenantId, commissionSplit),
+    onSuccess: () => {
+      invalidate();
+      setShowSplitModal(false);
+    },
+    onError: (e: any) => Alert.alert('Error', parseApiError(e) ?? 'Failed to update commission split'),
   });
 
   const exportFormatsMutation = useMutation({
@@ -191,6 +213,14 @@ export function TenantDetailScreen({ route, navigation }: Props) {
       { text: t('company.active'), onPress: () => statusMutation.mutate('active') },
       { text: t('company.inactive'), onPress: () => statusMutation.mutate('inactive') },
       { text: t('common.suspended'), style: 'destructive', onPress: () => statusMutation.mutate('suspended') },
+      { text: t('common.cancel'), style: 'cancel' },
+    ]);
+  };
+
+  const handleChangeBusinessType = () => {
+    Alert.alert('Change Business Type', 'Select how this company operates:', [
+      { text: 'Enterprise', onPress: () => businessTypeMutation.mutate('enterprise') },
+      { text: 'Aangadia', onPress: () => businessTypeMutation.mutate('aangadia') },
       { text: t('common.cancel'), style: 'cancel' },
     ]);
   };
@@ -250,6 +280,34 @@ export function TenantDetailScreen({ route, navigation }: Props) {
     commissionMutation.mutate({ type: commType, value: parsed });
   };
 
+  const handleOpenSplitModal = () => {
+    const split = (tenant as any)?.settings?.commissionSplit;
+    setSplitBranchPct(split?.branchPct != null ? String(split.branchPct) : '');
+    setSplitHeadOfficePct(split?.headOfficePct != null ? String(split.headOfficePct) : '');
+    setShowSplitModal(true);
+    setTimeout(() => splitBranchRef.current?.focus(), 300);
+  };
+
+  const handleSaveSplit = () => {
+    const branchPct = parseFloat(splitBranchPct);
+    const headOfficePct = parseFloat(splitHeadOfficePct);
+    if (!splitBranchPct.trim() || !splitHeadOfficePct.trim() || isNaN(branchPct) || isNaN(headOfficePct)) {
+      Alert.alert('Invalid', 'Enter both percentages.');
+      return;
+    }
+    if (2 * branchPct + headOfficePct !== 100) {
+      Alert.alert('Invalid', '2 × Branch % + Head Office % must equal 100.');
+      return;
+    }
+    commissionSplitMutation.mutate({ branchPct, headOfficePct });
+  };
+
+  const formatCommissionSplit = (settings: any) => {
+    const split = settings?.commissionSplit;
+    if (!split || split.branchPct == null || split.headOfficePct == null) return 'Not set';
+    return `Branch ${split.branchPct}% · HO ${split.headOfficePct}%`;
+  };
+
   const formatCommission = (settings: any) => {
     const comm = settings?.commission;
     if (!comm || comm.value == null) return 'Not set';
@@ -295,8 +353,20 @@ export function TenantDetailScreen({ route, navigation }: Props) {
         <Divider theme={theme} />
         <InfoRow label={t('company.staffLimit')} value={(tenant as any).staffLimit ?? '—'} theme={theme} />
         <Divider theme={theme} />
+        <InfoRow
+          label="Business Type"
+          value={(tenant as any).businessType === 'aangadia' ? 'Aangadia' : 'Enterprise'}
+          theme={theme}
+        />
+        <Divider theme={theme} />
         <InfoRow label="Commission" value={formatCommission((tenant as any).settings)} theme={theme} />
         <Divider theme={theme} />
+        {(tenant as any).businessType === 'enterprise' && (
+          <>
+            <InfoRow label="Commission Split" value={formatCommissionSplit((tenant as any).settings)} theme={theme} />
+            <Divider theme={theme} />
+          </>
+        )}
         <InfoRow
           label="Max Per Transaction"
           value={(tenant as any)?.settings?.transactionLimits?.maxAmountPerTransaction > 0
@@ -481,6 +551,21 @@ export function TenantDetailScreen({ route, navigation }: Props) {
           title={t('common.edit') + ' Commission'}
           onPress={handleOpenCommissionModal}
           variant="outline"
+          style={{ marginBottom: theme.spacing.sm }}
+        />
+        {(tenant as any).businessType === 'enterprise' && (
+          <AppButton
+            title={t('common.edit') + ' Commission Split'}
+            onPress={handleOpenSplitModal}
+            variant="outline"
+            style={{ marginBottom: theme.spacing.sm }}
+          />
+        )}
+        <AppButton
+          title="Change Business Type"
+          onPress={handleChangeBusinessType}
+          variant="outline"
+          loading={businessTypeMutation.isPending}
           style={{ marginBottom: theme.spacing.sm }}
         />
         <AppButton
@@ -848,6 +933,111 @@ export function TenantDetailScreen({ route, navigation }: Props) {
                 >
                   <Text style={[theme.typography.label, { color: '#fff' }]}>
                     {commissionMutation.isPending ? 'Saving…' : t('common.save')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={showSplitModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSplitModal(false)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: theme.spacing.lg }}>
+            <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.lg, padding: theme.spacing.lg }}>
+              <View style={{
+                width: 48, height: 48, borderRadius: 24,
+                backgroundColor: withAlpha(theme.colors.primary, 0.12),
+                justifyContent: 'center', alignItems: 'center',
+                alignSelf: 'center', marginBottom: theme.spacing.md,
+              }}>
+                <Ionicons name="git-branch-outline" size={26} color={theme.colors.primary} />
+              </View>
+
+              <Text style={[theme.typography.h3, { color: theme.colors.text, textAlign: 'center', marginBottom: theme.spacing.xs }]}>
+                {t('common.edit')} Commission Split
+              </Text>
+              <Text style={[theme.typography.body, { color: theme.colors.textSecondary, textAlign: 'center', marginBottom: theme.spacing.lg }]}>
+                Branch % applies to each of the two branches on a transaction; Head Office gets the rest. 2 × Branch % + Head Office % must equal 100.
+              </Text>
+
+              <Text style={[theme.typography.label, { color: theme.colors.text, marginBottom: theme.spacing.xs }]}>
+                Branch %
+              </Text>
+              <TextInput
+                ref={splitBranchRef}
+                value={splitBranchPct}
+                onChangeText={setSplitBranchPct}
+                placeholder="e.g. 30"
+                placeholderTextColor={theme.colors.textSecondary}
+                keyboardType="decimal-pad"
+                returnKeyType="next"
+                onSubmitEditing={() => splitHoRef.current?.focus()}
+                style={{
+                  borderWidth: 1.5,
+                  borderColor: theme.colors.divider,
+                  borderRadius: theme.borderRadius.md,
+                  padding: theme.spacing.md,
+                  color: theme.colors.text,
+                  fontSize: 18,
+                  fontWeight: '700',
+                  marginBottom: theme.spacing.md,
+                  textAlign: 'center',
+                }}
+              />
+
+              <Text style={[theme.typography.label, { color: theme.colors.text, marginBottom: theme.spacing.xs }]}>
+                Head Office %
+              </Text>
+              <TextInput
+                ref={splitHoRef}
+                value={splitHeadOfficePct}
+                onChangeText={setSplitHeadOfficePct}
+                placeholder="e.g. 40"
+                placeholderTextColor={theme.colors.textSecondary}
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+                onSubmitEditing={handleSaveSplit}
+                style={{
+                  borderWidth: 1.5,
+                  borderColor: theme.colors.divider,
+                  borderRadius: theme.borderRadius.md,
+                  padding: theme.spacing.md,
+                  color: theme.colors.text,
+                  fontSize: 18,
+                  fontWeight: '700',
+                  marginBottom: theme.spacing.md,
+                  textAlign: 'center',
+                }}
+              />
+
+              <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+                <TouchableOpacity
+                  onPress={() => setShowSplitModal(false)}
+                  style={{ flex: 1, padding: theme.spacing.md, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.colors.divider, alignItems: 'center' }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[theme.typography.label, { color: theme.colors.textSecondary }]}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSaveSplit}
+                  disabled={commissionSplitMutation.isPending}
+                  style={{
+                    flex: 1,
+                    padding: theme.spacing.md,
+                    borderRadius: theme.borderRadius.md,
+                    backgroundColor: theme.colors.primary,
+                    alignItems: 'center',
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[theme.typography.label, { color: '#fff' }]}>
+                    {commissionSplitMutation.isPending ? 'Saving…' : t('common.save')}
                   </Text>
                 </TouchableOpacity>
               </View>

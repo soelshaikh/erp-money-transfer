@@ -42,10 +42,11 @@ export default class RejectTransaction {
       ).catch(() => {});
     }
 
-    // Reverse the branch-funded portion of the collection credit.
-    // For collection-side, the original credit included commission (branchPortion + commissionAmount),
-    // so the reversal must include it too.
-    const branchPortion = transaction.amount - partnerCovered;
+    // Reverse the collection credit exactly as it was made at creation — the full amount,
+    // regardless of partner coverage (partner balance no longer nets out of the branch's own
+    // ledger; see CreateTransaction.ts). For collection-side, the original credit included
+    // commission (branchPortion + commissionAmount), so the reversal must include it too.
+    const branchPortion = transaction.amount;
     const isCollectionSide = !transaction.commissionSide || transaction.commissionSide === 'collection';
     const branchReversal = isCollectionSide ? branchPortion + (transaction.commissionAmount || 0) : branchPortion;
     if (branchReversal > 0) {

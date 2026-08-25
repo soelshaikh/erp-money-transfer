@@ -49,6 +49,13 @@ export function MyStatementScreen() {
     payout_committed: { label: t('ledger.payoutApproved'), icon: 'time-outline', affectsLabel: t('ledger.effectiveOnly'), isActual: false },
     payout_completed: { label: t('ledger.payoutMade'), icon: 'arrow-up-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
     collection_reversed: { label: t('ledger.cancelled'), icon: 'close-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    commission_earned: { label: 'Commission Earned', icon: 'cash-outline', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    commission_payable: { label: 'Commission Payable', icon: 'swap-horizontal-outline', affectsLabel: t('ledger.effectiveOnly'), isActual: false },
+    commission_receivable: { label: 'Commission Receivable', icon: 'swap-horizontal-outline', affectsLabel: t('ledger.effectiveOnly'), isActual: false },
+    commission_settlement_out: { label: 'Commission Settled (Out)', icon: 'arrow-up-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    commission_settlement_in: { label: 'Commission Settled (In)', icon: 'arrow-down-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    hq_commission_out: { label: 'HQ Commission Settled', icon: 'arrow-up-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    hq_commission_in: { label: 'HQ Commission Received', icon: 'arrow-down-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
   };
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({

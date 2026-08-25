@@ -1,6 +1,17 @@
 import mongoose from 'mongoose';
 import { APPROVAL_STATUS, PAYMENT_STATUS, PAYMENT_METHOD, COMMISSION_TYPE, COMMISSION_SIDE } from '../../../config/constants';
 
+// Enterprise-tenant-only snapshot of how commissionAmount was split at the time this
+// transaction earned it. Kept on the transaction (rather than only derived from the
+// HQCommissionItem) so reports stay accurate even if the tenant's split settings change later.
+const commissionSplitSchema = new mongoose.Schema({
+  earningBranchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', default: null },
+  ownShareAmount: { type: Number, default: 0 },
+  otherBranchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', default: null },
+  otherBranchShareAmount: { type: Number, default: 0 },
+  headOfficeOwnShareAmount: { type: Number, default: 0 },
+}, { _id: false });
+
 const transactionSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true },
   tokenNumber: { type: String, required: true }, // e.g. "AHM-20260628-00042"
@@ -32,6 +43,10 @@ const transactionSchema = new mongoose.Schema({
   customerTokenNo: { type: String, default: null },
   externalAccountId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExternalAccount', default: null },
   partnerCoveredAmount: { type: Number, default: 0 },
+  // Receiver-side partner (Lenar) — separate from externalAccountId (sender-side/Mokalnar).
+  // Balance moves at payout completion, not at creation — see CompletePayment.ts.
+  payoutExternalAccountId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExternalAccount', default: null },
+  commissionSplit: { type: commissionSplitSchema, default: null },
 }, {
   timestamps: true,
   collection: 'transactions',

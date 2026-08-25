@@ -14,6 +14,7 @@ export default class CreateTransaction {
   auditService: any;
   branchLedgerRepository: any;
   commissionPayableRepository: any;
+  hqCommissionItemRepository: any;
 
   constructor(deps: any) {
     this.transactionRepository = deps.transactionRepository;
@@ -23,10 +24,11 @@ export default class CreateTransaction {
     this.auditService = deps.auditService;
     this.branchLedgerRepository = deps.branchLedgerRepository;
     this.commissionPayableRepository = deps.commissionPayableRepository;
+    this.hqCommissionItemRepository = deps.hqCommissionItemRepository;
   }
 
   async execute(params: any): Promise<any> {
-    const { tenantId, collectionBranchId, payoutBranchId, amount, remarks, paymentMethod, collectionPhotoUrl, customerTokenNo, createdBy, actorName, actorUsername, externalAccountId } = params;
+    const { tenantId, collectionBranchId, payoutBranchId, amount, remarks, paymentMethod, collectionPhotoUrl, customerTokenNo, createdBy, actorName, actorUsername, externalAccountId, payoutExternalAccountId } = params;
     const validSides = Object.values(COMMISSION_SIDE) as string[];
     const commissionSide: string = validSides.includes(params.commissionSide) ? params.commissionSide : COMMISSION_SIDE.COLLECTION;
 
@@ -117,6 +119,33 @@ export default class CreateTransaction {
       '[TXN:UC] commission calculated',
     );
 
+    // --- Enterprise commission split validation ---
+    // Enterprise tenants must have branch%/HO% configured before any transaction can be
+    // created — silently falling back to the old single-branch commission logic would risk
+    // money landing in the wrong place.
+    const split = tenant.settings?.commissionSplit;
+    if (tenant.businessType === 'enterprise') {
+      if (split?.branchPct == null || split?.headOfficePct == null || (2 * split.branchPct + split.headOfficePct !== 100)) {
+        throw new ValidationError('Commission split (branch % / head office %) is not configured for this company yet. Ask super admin or head office to set it before creating transactions.');
+      }
+    }
+
+    // Enterprise, collection-side: commission is credited to the collection branch below
+    // (same as today), so the split — and the HQCommissionItem that records it — is computed
+    // now, before the transaction is created, so the snapshot can be saved on it.
+    let commissionSplitSnapshot: any = null;
+    let commissionSplitParts: ReturnType<typeof Commission.splitEnterprise> | null = null;
+    if (tenant.businessType === 'enterprise' && commissionSide === COMMISSION_SIDE.COLLECTION && commissionAmount > 0) {
+      commissionSplitParts = Commission.splitEnterprise(commissionAmount, split.branchPct, split.headOfficePct);
+      commissionSplitSnapshot = {
+        earningBranchId: collectionBranchId,
+        ownShareAmount: commissionSplitParts.ownShareAmount,
+        otherBranchId: payoutBranchId,
+        otherBranchShareAmount: commissionSplitParts.otherBranchShareAmount,
+        headOfficeOwnShareAmount: commissionSplitParts.headOfficeOwnShareAmount,
+      };
+    }
+
     // --- Partner (ExternalAccount) validation and onHold ---
     let partnerCoveredAmount = 0;
     let partner: any = null;
@@ -135,6 +164,14 @@ export default class CreateTransaction {
       );
 
       logger.info({ externalAccountId, availableBalance, partnerCoveredAmount }, '[TXN:UC] partner on-hold locked');
+    }
+
+    // Receiver-side partner (Lenar) — validated now, but balance moves only at payout
+    // completion (CompletePayment.ts), matching when the payout branch itself is credited/debited.
+    let payoutPartner: any = null;
+    if (payoutExternalAccountId) {
+      payoutPartner = await ExternalAccountModel.findOne({ _id: payoutExternalAccountId, tenantId, branchId: payoutBranchId, status: 'active' });
+      if (!payoutPartner) throw new ValidationError('Payout partner account not found or not linked to the payout branch');
     }
 
     const now = new Date();
@@ -162,14 +199,37 @@ export default class CreateTransaction {
       createdBy,
       externalAccountId: externalAccountId || null,
       partnerCoveredAmount,
+      payoutExternalAccountId: payoutExternalAccountId || null,
+      commissionSplit: commissionSplitSnapshot,
     });
 
     logger.info({ transactionId: transaction._id, tokenNumber }, '[TXN:UC] transaction saved to DB');
 
-    // Credit collection branch with the amount NOT covered by partner:
-    // collection side → (amount − partnerCovered) + commission
-    // payout side → amount − partnerCovered
-    const branchPortion = amount - partnerCoveredAmount;
+    if (commissionSplitSnapshot && commissionSplitParts) {
+      this.hqCommissionItemRepository.create({
+        tenantId,
+        branchId: collectionBranchId,
+        branchName: collectionBranch.name,
+        branchCode: collectionBranch.code,
+        transactionId: transaction._id,
+        tokenNumber,
+        commissionAmount,
+        hqSharePct: commissionSplitParts.hqSharePct,
+        hqShareAmount: commissionSplitParts.hqShareAmount,
+        otherBranchId: payoutBranchId,
+        otherBranchName: payoutBranch.name,
+        otherBranchCode: payoutBranch.code,
+        otherBranchShareAmount: commissionSplitParts.otherBranchShareAmount,
+        headOfficeOwnShareAmount: commissionSplitParts.headOfficeOwnShareAmount,
+      }).catch(() => {});
+    }
+
+    // Credit collection branch with the FULL transaction amount — partner coverage no longer
+    // nets out of the branch's own ledger. Partner balance moves separately (see the onHold
+    // lock above and ApproveTransaction.ts); both are now fully visible, nothing hidden.
+    // collection side → amount + commission
+    // payout side → amount
+    const branchPortion = amount;
     const collectionCredit = commissionSide === COMMISSION_SIDE.COLLECTION ? branchPortion + commissionAmount : branchPortion;
 
     logger.info({ collectionBranchId, collectionCredit, branchPortion, partnerCoveredAmount, commissionSide }, '[TXN:UC] crediting collection branch ledger');
@@ -179,7 +239,7 @@ export default class CreateTransaction {
         transactionId: transaction._id,
         type: 'credit',
         amount: collectionCredit,
-        description: `Collected ${commissionSide === COMMISSION_SIDE.COLLECTION ? `₹${collectionCredit} (incl. ₹${commissionAmount} commission)` : `₹${branchPortion}`} → Payout to ${payoutBranch.name}${partner ? ` [Partner: ${partner.name}]` : ''}`,
+        description: `Collected ${commissionSide === COMMISSION_SIDE.COLLECTION ? `₹${collectionCredit} (incl. ₹${commissionAmount} commission)` : `₹${branchPortion}`} → Payout to ${payoutBranch.name}${partner ? ` [Sender Partner: ${partner.name}]` : ''}${payoutPartner ? ` [Receiver Partner: ${payoutPartner.name}]` : ''}`,
         event: 'collection',
         tokenNumber,
       });

@@ -29,6 +29,8 @@ export default class TenantController {
     this.updateBranchLimit = this.updateBranchLimit.bind(this);
     this.updateStaffLimit = this.updateStaffLimit.bind(this);
     this.updateCommission = this.updateCommission.bind(this);
+    this.updateBusinessType = this.updateBusinessType.bind(this);
+    this.updateCommissionSplit = this.updateCommissionSplit.bind(this);
     this.updateTransactionLimits = this.updateTransactionLimits.bind(this);
     this.list = this.list.bind(this);
     this.getOne = this.getOne.bind(this);
@@ -80,6 +82,20 @@ export default class TenantController {
     if (!tenant) throw new NotFoundError('Tenant');
     await this.tenantRepository.update(req.params.id, { 'settings.commission': req.body.commission });
     res.json({ success: true });
+  }
+
+  async updateBusinessType(req: any, res: any) {
+    const tenant = await this.tenantRepository.findById(req.params.id);
+    if (!tenant) throw new NotFoundError('Tenant');
+    await this.tenantRepository.update(req.params.id, { businessType: req.body.businessType });
+    res.json({ success: true, data: { businessType: req.body.businessType } });
+  }
+
+  async updateCommissionSplit(req: any, res: any) {
+    const tenant = await this.tenantRepository.findById(req.params.id);
+    if (!tenant) throw new NotFoundError('Tenant');
+    await this.tenantRepository.update(req.params.id, { 'settings.commissionSplit': req.body.commissionSplit });
+    res.json({ success: true, data: { commissionSplit: req.body.commissionSplit } });
   }
 
   async list(req: any, res: any) {

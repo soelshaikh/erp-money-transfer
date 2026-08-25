@@ -28,8 +28,9 @@ export default class ExternalAccountController {
   async list(req: any, res: any) {
     const { tenantId, role, branchId: userBranchId } = req.user;
     const { status, branchId: queryBranchId } = req.query;
-    // Branch users see only their own branch's partners
-    const branchId = role === 'branch' ? userBranchId : (queryBranchId || undefined);
+    // Branch users default to their own branch's partners, but may explicitly request
+    // another branch's list (e.g. picking a payout-side partner when creating a transaction)
+    const branchId = role === 'branch' ? (queryBranchId || userBranchId) : (queryBranchId || undefined);
     const result = await this.getExternalAccounts.execute({ tenantId, status, branchId });
     res.status(200).json({ success: true, data: result });
   }
