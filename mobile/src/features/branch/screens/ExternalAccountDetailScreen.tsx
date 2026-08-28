@@ -62,26 +62,51 @@ function AddEntryModal({ visible, onClose, onAdded, accountId, theme }: any) {
   const [adjDir, setAdjDir] = useState<'credit' | 'debit'>('credit');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [error, setError] = useState('');
+
+  const { data: branchesRaw } = useQuery({
+    queryKey: ['branches', 'active'],
+    queryFn: branchApi.listActive,
+    staleTime: 60_000,
+    enabled: visible,
+  });
+  const branches: any[] = (branchesRaw as any) || [];
 
   const mutation = useMutation({
     mutationFn: () => {
       const dir = entryType === 'deposit' ? 'credit' : entryType === 'due' ? 'debit' : adjDir;
-      return externalAccountApi.addEntry(accountId, {
+      const payload = {
         type: entryType,
         direction: dir,
         amount: Math.round(parseFloat(amount)),
         description: description.trim() || undefined,
-      });
+        branchId: selectedBranchId || undefined,
+      };
+      console.log('[AddEntry] sending payload:', JSON.stringify(payload));
+      console.log('[AddEntry] branchId sent?', !!payload.branchId, '| value:', payload.branchId);
+      return externalAccountApi.addEntry(accountId, payload);
     },
-    onSuccess: (data) => { onAdded(data); setAmount(''); setDescription(''); setError(''); },
-    onError: (err: any) => setError(parseApiError(err) || 'Failed to add entry'),
+    onSuccess: (data: any) => {
+      console.log('[AddEntry] SUCCESS — response:', JSON.stringify(data));
+      console.log('[AddEntry] partnerBalanceAfter:', data?.balanceAfter);
+      onAdded(data);
+      setAmount('');
+      setDescription('');
+      setSelectedBranchId(null);
+      setError('');
+    },
+    onError: (err: any) => {
+      console.log('[AddEntry] ERROR:', JSON.stringify(err?.response?.data || err?.message || err));
+      setError(parseApiError(err) || 'Failed to add entry');
+    },
   });
 
   const handleSubmit = () => {
     setError('');
     const parsed = parseFloat(amount);
     if (!amount || isNaN(parsed) || parsed <= 0) { setError('Enter a valid amount'); return; }
+    if (!selectedBranchId) { setError('Select the branch where this cash movement happened'); return; }
     mutation.mutate();
   };
 
@@ -103,7 +128,11 @@ function AddEntryModal({ visible, onClose, onAdded, accountId, theme }: any) {
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: theme.colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: theme.spacing.lg }}>
+          <ScrollView
+            style={{ backgroundColor: theme.colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 }}
+            contentContainerStyle={{ padding: theme.spacing.lg }}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md }}>
               <Text style={[theme.typography.h3, { color: theme.colors.text }]}>Add Entry</Text>
               <TouchableOpacity onPress={onClose}><Ionicons name="close" size={22} color={theme.colors.textSecondary} /></TouchableOpacity>
@@ -132,6 +161,29 @@ function AddEntryModal({ visible, onClose, onAdded, accountId, theme }: any) {
                 ))}
               </View>
             )}
+
+            {/* Branch picker — required for all manual entries */}
+            <View style={{ marginBottom: theme.spacing.md }}>
+              <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginBottom: 6 }]}>
+                Branch (cash held at) *
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
+                <View style={{ flexDirection: 'row', gap: theme.spacing.xs }}>
+                  {branches.map((b: any) => {
+                    const sel = selectedBranchId === b._id;
+                    return (
+                      <TouchableOpacity
+                        key={b._id}
+                        onPress={() => setSelectedBranchId(b._id)}
+                        style={{ paddingHorizontal: theme.spacing.sm, paddingVertical: 7, borderRadius: theme.borderRadius.sm, borderWidth: 1.5, borderColor: sel ? theme.colors.primary : theme.colors.border, backgroundColor: sel ? withAlpha(theme.colors.primary, 0.08) : theme.colors.inputBackground }}
+                      >
+                        <Text style={{ color: sel ? theme.colors.primary : theme.colors.textSecondary, fontWeight: sel ? '700' : '400', fontSize: 13 }}>{b.code} — {b.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </View>
 
             {/* Amount */}
             <View style={{ marginBottom: theme.spacing.sm }}>
@@ -162,7 +214,7 @@ function AddEntryModal({ visible, onClose, onAdded, accountId, theme }: any) {
             {!!error && <Text style={{ color: theme.colors.error, marginBottom: theme.spacing.sm, fontSize: 13 }}>{error}</Text>}
 
             <AppButton title="Save Entry" onPress={handleSubmit} loading={mutation.isPending} />
-          </View>
+          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -372,9 +424,12 @@ export function ExternalAccountDetailScreen() {
         accountId={accountId}
         onClose={() => setShowEntry(false)}
         onAdded={() => {
+          console.log('[AddEntry] onAdded — invalidating dashboard, branches, external-accounts');
           setShowEntry(false);
           qc.invalidateQueries({ queryKey: ['external-ledger', accountId] });
           qc.invalidateQueries({ queryKey: ['external-accounts'] });
+          qc.invalidateQueries({ queryKey: ['branches'] });
+          qc.invalidateQueries({ queryKey: ['dashboard'] });
         }}
       />
     </View>

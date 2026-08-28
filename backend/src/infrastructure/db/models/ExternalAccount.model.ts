@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const externalAccountSchema = new mongoose.Schema({
   tenantId:      { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true },
-  branchId:      { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', required: true },
+  branchId:      { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', default: null },
   name:          { type: String, required: true, trim: true },
   code:          { type: String, required: true, trim: true, uppercase: true },
   contactPerson: { type: String, trim: true, default: null },

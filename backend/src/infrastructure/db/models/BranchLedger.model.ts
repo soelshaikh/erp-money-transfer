@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const branchLedgerSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true },
   branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', required: true },
-  transactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', required: true },
+  transactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null },
   type: { type: String, enum: ['credit', 'debit', 'committed_debit', 'pending_debit', 'pending_reversed'], required: true },
   amount: { type: Number, required: true }, // always positive
   // Actual balance (real money)
@@ -21,10 +21,11 @@ const branchLedgerSchema = new mongoose.Schema({
       'commission_payable', 'commission_receivable',
       'commission_settlement_out', 'commission_settlement_in',
       'hq_commission_out', 'hq_commission_in',
+      'partner_deposit', 'partner_due',
     ],
     required: true,
   },
-  tokenNumber: { type: String, required: true },
+  tokenNumber: { type: String, default: null },
 }, {
   timestamps: true,
   collection: 'branch_ledger',

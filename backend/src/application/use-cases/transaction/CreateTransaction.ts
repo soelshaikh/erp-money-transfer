@@ -151,8 +151,8 @@ export default class CreateTransaction {
     let partner: any = null;
 
     if (externalAccountId) {
-      partner = await ExternalAccountModel.findOne({ _id: externalAccountId, tenantId, branchId: collectionBranchId, status: 'active' });
-      if (!partner) throw new ValidationError('Partner account not found or not linked to this branch');
+      partner = await ExternalAccountModel.findOne({ _id: externalAccountId, tenantId, status: 'active' });
+      if (!partner) throw new ValidationError('Partner account not found or inactive');
 
       const availableBalance = partner.balance - partner.onHold;
       partnerCoveredAmount = Math.max(0, Math.min(amount, availableBalance));
@@ -170,8 +170,8 @@ export default class CreateTransaction {
     // completion (CompletePayment.ts), matching when the payout branch itself is credited/debited.
     let payoutPartner: any = null;
     if (payoutExternalAccountId) {
-      payoutPartner = await ExternalAccountModel.findOne({ _id: payoutExternalAccountId, tenantId, branchId: payoutBranchId, status: 'active' });
-      if (!payoutPartner) throw new ValidationError('Payout partner account not found or not linked to the payout branch');
+      payoutPartner = await ExternalAccountModel.findOne({ _id: payoutExternalAccountId, tenantId, status: 'active' });
+      if (!payoutPartner) throw new ValidationError('Payout partner account not found or inactive');
     }
 
     const now = new Date();

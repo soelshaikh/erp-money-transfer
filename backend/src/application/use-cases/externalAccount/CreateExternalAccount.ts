@@ -1,29 +1,18 @@
 import ExternalAccountModel from '../../../infrastructure/db/models/ExternalAccount.model';
-import { ConflictError, NotFoundError } from '../../../domain/errors';
+import { ConflictError } from '../../../domain/errors';
 
 export default class CreateExternalAccount {
-  branchRepository: any;
-
-  constructor(deps: any = {}) {
-    this.branchRepository = deps.branchRepository;
-  }
+  constructor(_deps: any = {}) {}
 
   async execute(params: any): Promise<any> {
-    const { tenantId, branchId, name, code, contactPerson, phone, address, notes, createdBy } = params;
-
-    if (!branchId) throw new NotFoundError('branchId is required');
-
-    if (this.branchRepository) {
-      const branch = await this.branchRepository.findById(tenantId, branchId);
-      if (!branch) throw new NotFoundError('Branch not found');
-    }
+    const { tenantId, name, code, contactPerson, phone, address, notes, createdBy } = params;
 
     const existing = await ExternalAccountModel.findOne({ tenantId, code: code.trim().toUpperCase() });
     if (existing) throw new ConflictError(`Partner code '${code.toUpperCase()}' already exists`);
 
     const account = await ExternalAccountModel.create({
       tenantId,
-      branchId,
+      branchId: null,
       name: name.trim(),
       code: code.trim().toUpperCase(),
       contactPerson: contactPerson?.trim() || null,

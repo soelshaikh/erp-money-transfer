@@ -57,6 +57,10 @@ function buildIncrement(event: string, amount: number): Record<string, number> {
       return { balance: -amount };
     case 'hq_commission_in':
       return { balance: amount };
+    case 'partner_deposit':
+      return { balance: amount };
+    case 'partner_due':
+      return { balance: -amount };
     default:
       return {};
   }

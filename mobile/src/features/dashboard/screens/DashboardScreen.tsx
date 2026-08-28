@@ -424,7 +424,7 @@ export function DashboardScreen() {
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={{ fontSize: 9, color: theme.colors.textSecondary, fontWeight: '600' }}>
-                      {isNeg ? 'OWES US' : bal === 0 ? 'NIL' : 'CREDIT'}
+                      {isNeg ? 'OWES US' : bal === 0 ? 'SETTLED' : 'CREDIT'}
                     </Text>
                     <Text style={{ color: balColor, fontWeight: '700', fontSize: 14 }} allowFontScaling={false}>
                       {fmtAmt(Math.abs(bal))}

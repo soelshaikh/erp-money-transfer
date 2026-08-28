@@ -620,7 +620,7 @@ export function MainNavigator() {
         <Tab.Screen
           name="Partners"
           component={PartnersStack}
-          options={{ title: 'Partners', tabBarIcon: icon('people-outline') }}
+          options={{ title: 'Partners', tabBarIcon: icon('people') }}
         />
       )}
 

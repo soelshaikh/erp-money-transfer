@@ -26,12 +26,10 @@ export default class ExternalAccountController {
   }
 
   async list(req: any, res: any) {
-    const { tenantId, role, branchId: userBranchId } = req.user;
-    const { status, branchId: queryBranchId } = req.query;
-    // Branch users default to their own branch's partners, but may explicitly request
-    // another branch's list (e.g. picking a payout-side partner when creating a transaction)
-    const branchId = role === 'branch' ? (queryBranchId || userBranchId) : (queryBranchId || undefined);
-    const result = await this.getExternalAccounts.execute({ tenantId, status, branchId });
+    const { tenantId } = req.user;
+    const { status } = req.query;
+    // Partners are company-wide — no branch filter
+    const result = await this.getExternalAccounts.execute({ tenantId, status });
     res.status(200).json({ success: true, data: result });
   }
 
@@ -45,11 +43,12 @@ export default class ExternalAccountController {
   async addEntry(req: any, res: any) {
     const { tenantId, id: createdBy, name: createdByName } = req.user;
     const { id: accountId } = req.params;
-    const { type, direction, amount, description, entryDate } = req.body;
+    const { type, direction, amount, description, entryDate, branchId } = req.body;
     const result = await this.addExternalEntry.execute({
       tenantId, accountId, type, direction,
       amount: Math.round(amount),
       description, entryDate, createdBy, createdByName,
+      branchId: branchId || null,
     });
     res.status(201).json({ success: true, data: result });
   }

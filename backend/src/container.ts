@@ -288,10 +288,10 @@ export default function buildContainer(io: any) {
   const unsuspendUser = new UnsuspendUser({ userRepository, auditService });
   const getUserActiveTransactions = new GetUserActiveTransactions({ userRepository, transactionRepository });
   const resetDevData = new ResetDevData();
-  const createExternalAccount = new CreateExternalAccount({ branchRepository });
+  const createExternalAccount = new CreateExternalAccount();
   const getExternalAccounts   = new GetExternalAccounts();
   const updateExternalAccount = new UpdateExternalAccount();
-  const addExternalEntry      = new AddExternalEntry();
+  const addExternalEntry      = new AddExternalEntry({ branchLedgerRepository });
   const getExternalLedger     = new GetExternalLedger();
   const externalAccountController = new ExternalAccountController({ createExternalAccount, getExternalAccounts, updateExternalAccount, addExternalEntry, getExternalLedger });
 

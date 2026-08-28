@@ -37,7 +37,7 @@ export default class GetDashboard {
     if (role === ROLES.BRANCH && branchId) {
       const [branch, partners] = await Promise.all([
         this.branchRepository.findById(tenantId, branchId),
-        ExternalAccountModel.find({ tenantId, branchId, status: 'active' })
+        ExternalAccountModel.find({ tenantId, status: 'active' })
           .select('_id name code balance onHold')
           .sort({ name: 1 })
           .lean(),

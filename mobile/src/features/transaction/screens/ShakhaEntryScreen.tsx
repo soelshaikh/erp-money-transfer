@@ -356,6 +356,7 @@ export function ShakhaEntryScreen({ navigation }: Props) {
     onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['external-accounts'] });
       refetchToday();
       clearForm();
       Alert.alert(t('common.success'), `Token: ${data.tokenNumber}\n${fmtAmt(Number(data.amount))}`);

@@ -13,6 +13,7 @@ const externalLedgerSchema = new mongoose.Schema({
   balanceBefore:     { type: Number, required: true },
   balanceAfter:      { type: Number, required: true },
   transactionId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null },
+  branchId:          { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', default: null },
   description:       { type: String, trim: true, default: null },
   entryDate:         { type: String, required: true },  // YYYY-MM-DD
   createdBy:         { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

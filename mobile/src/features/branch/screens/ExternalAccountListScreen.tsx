@@ -17,13 +17,12 @@ import { LoadingScreen } from '../../../shared/components/LoadingScreen';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { parseApiError } from '../../../utils/apiError';
 import { externalAccountApi } from '../api/externalAccountApi';
-import { branchApi } from '../api/branchApi';
 
 function BalancePill({ balance, theme }: { balance: number; theme: any }) {
   const isNeg  = balance < 0;
   const isZero = balance === 0;
   const color  = isNeg ? theme.colors.error : isZero ? theme.colors.textSecondary : theme.colors.success;
-  const label  = isNeg ? 'OWES US' : isZero ? 'NIL' : 'CREDIT';
+  const label  = isNeg ? 'OWES US' : isZero ? 'SETTLED' : 'CREDIT';
   return (
     <View style={{ alignItems: 'flex-end' }}>
       <Text style={{ fontSize: 9, color: theme.colors.textSecondary, fontWeight: '600' }}>{label}</Text>
@@ -35,20 +34,11 @@ function BalancePill({ balance, theme }: { balance: number; theme: any }) {
 }
 
 function CreateModal({ visible, onClose, onCreated, theme }: any) {
-  const [form, setForm] = useState({ branchId: '', name: '', code: '', contactPerson: '', phone: '', address: '', notes: '' });
+  const [form, setForm] = useState({ name: '', code: '', contactPerson: '', phone: '', address: '', notes: '' });
   const [error, setError] = useState('');
-
-  const { data: branchesRaw } = useQuery({
-    queryKey: ['branches', 'active'],
-    queryFn: branchApi.listActive,
-    staleTime: 60_000,
-    enabled: visible,
-  });
-  const branches: any[] = (branchesRaw as any) || [];
 
   const mutation = useMutation({
     mutationFn: () => externalAccountApi.create({
-      branchId: form.branchId,
       name: form.name.trim(),
       code: form.code.trim(),
       contactPerson: form.contactPerson.trim() || undefined,
@@ -58,7 +48,7 @@ function CreateModal({ visible, onClose, onCreated, theme }: any) {
     }),
     onSuccess: (data) => {
       onCreated(data);
-      setForm({ branchId: '', name: '', code: '', contactPerson: '', phone: '', address: '', notes: '' });
+      setForm({ name: '', code: '', contactPerson: '', phone: '', address: '', notes: '' });
     },
     onError: (err: any) => setError(parseApiError(err) || 'Failed to create partner'),
   });
@@ -78,7 +68,6 @@ function CreateModal({ visible, onClose, onCreated, theme }: any) {
 
   const handleSubmit = () => {
     setError('');
-    if (!form.branchId) { setError('Select a branch'); return; }
     if (!form.name.trim() || !form.code.trim()) { setError('Name and Code are required'); return; }
     mutation.mutate();
   };
@@ -93,27 +82,6 @@ function CreateModal({ visible, onClose, onCreated, theme }: any) {
               <TouchableOpacity onPress={onClose}><Ionicons name="close" size={22} color={theme.colors.textSecondary} /></TouchableOpacity>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-              {/* Branch picker */}
-              <View style={{ marginBottom: theme.spacing.sm }}>
-                <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginBottom: 4 }]}>Branch *</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-                  <View style={{ flexDirection: 'row', gap: theme.spacing.xs }}>
-                    {branches.map((b: any) => {
-                      const sel = form.branchId === b._id;
-                      return (
-                        <TouchableOpacity
-                          key={b._id}
-                          onPress={() => setForm((f) => ({ ...f, branchId: b._id }))}
-                          style={{ paddingHorizontal: theme.spacing.sm, paddingVertical: 7, borderRadius: theme.borderRadius.sm, borderWidth: 1.5, borderColor: sel ? theme.colors.primary : theme.colors.border, backgroundColor: sel ? withAlpha(theme.colors.primary, 0.08) : theme.colors.inputBackground }}
-                        >
-                          <Text style={{ color: sel ? theme.colors.primary : theme.colors.textSecondary, fontWeight: sel ? '700' : '400', fontSize: 13 }}>{b.code} — {b.name}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </ScrollView>
-              </View>
-
               {field('Name *', 'name', { placeholder: 'ABC Trading' })}
               {field('Code * (short, unique)', 'code', { placeholder: 'ABCT', autoCapitalize: 'characters' })}
               {field('Contact Person', 'contactPerson', { placeholder: 'Ramesh Shah' })}

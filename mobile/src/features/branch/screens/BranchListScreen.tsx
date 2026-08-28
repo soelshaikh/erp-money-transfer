@@ -147,6 +147,27 @@ function BranchItem({ item, theme, onDelete, onToggle, onViewLedger, onEditCommi
             )}
           </View>
         )}
+
+        {/* Row 4: working hours footer */}
+        {item.type !== 'head_office' && (() => {
+          const wh = item.workingHours;
+          const whOn = wh?.enabled === true;
+          return (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Ionicons name={whOn ? 'time' : 'time-outline'} size={12} color={whOn ? theme.colors.primary : theme.colors.textSecondary} />
+                <Text style={[theme.typography.caption, { color: whOn ? theme.colors.primary : theme.colors.textSecondary }]}>
+                  {whOn ? `${wh.startTime} – ${wh.endTime}` : 'Inherits company hours'}
+                </Text>
+              </View>
+              <View style={{ backgroundColor: whOn ? withAlpha(theme.colors.primary, 0.10) : withAlpha(theme.colors.textSecondary, 0.10), paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                <Text style={{ fontSize: 9, color: whOn ? theme.colors.primary : theme.colors.textSecondary, fontWeight: '700' }} allowFontScaling={false}>
+                  {whOn ? 'CUSTOM' : 'DEFAULT'}
+                </Text>
+              </View>
+            </View>
+          );
+        })()}
       </AppCard>
     </TouchableOpacity>
   );

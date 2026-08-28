@@ -35,6 +35,7 @@ export function CompletePaymentScreen({ route, navigation }: Props) {
       qc.invalidateQueries({ queryKey: ['transaction', transactionId] });
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['external-accounts'] });
       const msg = isPayoutSide && payoutMode === 'extra'
         ? `Token ${tokenNumber} — Paid ${fmtAmt(Number(amount))} to receiver. Collect ${fmtAmt(Number(commissionAmount))} commission from them.`
         : `Token ${tokenNumber} — ${fmtAmt(Number(finalAmount))} paid to receiver.`;
