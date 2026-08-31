@@ -10,6 +10,7 @@ interface Props {
   placeholder?: string;
   secureTextEntry?: boolean;
   error?: string;
+  helper?: string;
   keyboardType?: KeyboardTypeOptions;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   editable?: boolean;
@@ -22,7 +23,7 @@ interface Props {
 
 export const AppInput = forwardRef<TextInput, Props>(function AppInput({
   label, value, onChangeText, placeholder, secureTextEntry,
-  error, keyboardType, autoCapitalize = 'none', editable = true, multiline,
+  error, helper, keyboardType, autoCapitalize = 'none', editable = true, multiline,
   returnKeyType, onSubmitEditing, blurOnSubmit, autoCorrect = false,
 }, ref) {
   const theme = useTheme();
@@ -79,6 +80,8 @@ export const AppInput = forwardRef<TextInput, Props>(function AppInput({
       </View>
       {error ? (
         <Text style={[theme.typography.caption, { color: theme.colors.error, marginTop: 4 }]}>{error}</Text>
+      ) : helper ? (
+        <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginTop: 4 }]}>{helper}</Text>
       ) : null}
     </View>
   );

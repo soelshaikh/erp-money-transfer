@@ -3,16 +3,19 @@ import mongoose from 'mongoose';
 const externalLedgerSchema = new mongoose.Schema({
   tenantId:          { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true },
   externalAccountId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExternalAccount', required: true },
-  // deposit    = they brought cash to us              (credit → balance +)
-  // due        = they owe us money                    (debit  → balance −)
-  // withdrawal = credit consumed by a transaction     (debit  → balance −)
-  // adjustment = manual correction                    (direction determines sign)
-  type:              { type: String, enum: ['deposit', 'due', 'withdrawal', 'adjustment'], required: true },
+  // deposit      = they brought cash to us              (credit → balance +)
+  // due          = they owe us money                    (debit  → balance −)
+  // withdrawal   = cash taken back by partner           (debit  → balance −)
+  // adjustment   = manual correction                    (direction determines sign)
+  // transfer_out = funds moved out of this branch       (debit  → branch balance −)
+  // transfer_in  = funds received at this branch        (credit → branch balance +)
+  type:              { type: String, enum: ['deposit', 'due', 'withdrawal', 'adjustment', 'transfer_out', 'transfer_in'], required: true },
   direction:         { type: String, enum: ['credit', 'debit'], required: true },
   amount:            { type: Number, required: true },  // always positive paisa
   balanceBefore:     { type: Number, required: true },
   balanceAfter:      { type: Number, required: true },
   transactionId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', default: null },
+  branchId:          { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', default: null },
   description:       { type: String, trim: true, default: null },
   entryDate:         { type: String, required: true },  // YYYY-MM-DD
   createdBy:         { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

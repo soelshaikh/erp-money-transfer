@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
+import { showToast } from '../../../utils/toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../../theme/TenantThemeProvider';
 import { settingsApi } from '../api/settingsApi';
@@ -34,6 +35,8 @@ export function EditSettingsScreen({ navigation }: Props) {
     whEnabled: boolean;
     whStart: string;
     whEnd: string;
+    splitBranchPct: string;
+    splitHeadOfficePct: string;
   }>({
     appName: '',
     commissionType: 'flat',
@@ -41,6 +44,8 @@ export function EditSettingsScreen({ navigation }: Props) {
     whEnabled: false,
     whStart: '09:00',
     whEnd: '18:00',
+    splitBranchPct: '',
+    splitHeadOfficePct: '',
   });
 
   const { data, isLoading } = useQuery({
@@ -49,9 +54,12 @@ export function EditSettingsScreen({ navigation }: Props) {
     staleTime: 60_000,
   });
 
+  const isEnterprise = (data as any)?.businessType === 'enterprise';
+
   useEffect(() => {
     if (!data) return;
     const wh = (data as any).settings?.workingHours;
+    const split = (data as any).settings?.commissionSplit;
     setForm({
       appName: (data as any).branding?.appName || '',
       commissionType: (data as any).settings?.commission?.type || 'flat',
@@ -59,8 +67,15 @@ export function EditSettingsScreen({ navigation }: Props) {
       whEnabled: wh?.enabled === true,
       whStart: wh?.startTime || '09:00',
       whEnd: wh?.endTime || '18:00',
+      splitBranchPct: split?.branchPct != null ? String(split.branchPct) : '',
+      splitHeadOfficePct: split?.headOfficePct != null ? String(split.headOfficePct) : '',
     });
   }, [data]);
+
+  const branchPctNum = parseFloat(form.splitBranchPct);
+  const hoPctNum = parseFloat(form.splitHeadOfficePct);
+  const splitFilled = form.splitBranchPct.trim() !== '' && form.splitHeadOfficePct.trim() !== '';
+  const splitValid = splitFilled && !isNaN(branchPctNum) && !isNaN(hoPctNum) && (2 * branchPctNum + hoPctNum === 100);
 
   const mutation = useMutation({
     mutationFn: () => settingsApi.update({
@@ -75,13 +90,34 @@ export function EditSettingsScreen({ navigation }: Props) {
           startTime: form.whStart.trim() || '09:00',
           endTime: form.whEnd.trim() || '18:00',
         },
+        ...(isEnterprise && splitValid && {
+          commissionSplit: { branchPct: branchPctNum, headOfficePct: hoPctNum },
+        }),
       },
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
-      Alert.alert('Success', 'Settings saved', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      showToast('success', 'Settings saved');
+      navigation.goBack();
     },
   });
+
+  const handleSave = () => {
+    const cv = parseFloat(form.commissionValue);
+    if (!form.commissionValue.trim() || isNaN(cv) || cv < 0) {
+      showToast('error', 'Invalid', 'Enter a valid commission value (0 or more).');
+      return;
+    }
+    if (form.commissionType === 'percentage' && cv > 100) {
+      showToast('error', 'Invalid', 'Commission percentage cannot exceed 100.');
+      return;
+    }
+    if (isEnterprise && splitFilled && !splitValid) {
+      showToast('error', 'Invalid', '2 × Branch % + Head Office % must equal 100');
+      return;
+    }
+    mutation.mutate();
+  };
 
   const apiError = parseApiError(mutation.error);
 
@@ -157,11 +193,47 @@ export function EditSettingsScreen({ navigation }: Props) {
           keyboardType="decimal-pad"
         />
 
+        {isEnterprise && (
+          <>
+            <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm, marginTop: theme.spacing.md }]}>
+              COMMISSION SPLIT
+            </Text>
+            <Text style={[theme.typography.bodySmall, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm }]}>
+              Branch % applies to each of the two branches on a transaction; Head Office gets the rest. 2 × Branch % + Head Office % must equal 100.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <AppInput
+                  label="Branch %"
+                  value={form.splitBranchPct}
+                  onChangeText={(v: string) => setForm((f) => ({ ...f, splitBranchPct: v.replace(/[^0-9.]/g, '') }))}
+                  placeholder="e.g. 30"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppInput
+                  label="Head Office %"
+                  value={form.splitHeadOfficePct}
+                  onChangeText={(v: string) => setForm((f) => ({ ...f, splitHeadOfficePct: v.replace(/[^0-9.]/g, '') }))}
+                  placeholder="e.g. 40"
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            </View>
+            {splitFilled && !splitValid && (
+              <Text style={[theme.typography.caption, { color: theme.colors.error, marginTop: theme.spacing.xs }]}>
+                2 × Branch % + Head Office % must equal 100
+              </Text>
+            )}
+          </>
+        )}
+
+        {/* WORKING HOURS — hidden for now; branch-wise manual management preferred
         <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm, marginTop: theme.spacing.md }]}>
           {t('signOff.workingHours').toUpperCase()}
         </Text>
 
-        {/* Enable toggle */}
         <TouchableOpacity
           onPress={() => setForm((f) => ({ ...f, whEnabled: !f.whEnabled }))}
           style={{
@@ -207,10 +279,11 @@ export function EditSettingsScreen({ navigation }: Props) {
             </View>
           </View>
         )}
+        */}
 
         <AppButton
           title={t('settings.saveBtn')}
-          onPress={() => mutation.mutate()}
+          onPress={handleSave}
           loading={mutation.isPending}
           style={{ marginTop: theme.spacing.lg }}
         />

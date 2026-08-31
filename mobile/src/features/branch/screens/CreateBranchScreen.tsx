@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, TextInput } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
@@ -8,6 +8,7 @@ import { AppInput } from '../../../shared/components/AppInput';
 import { AppButton } from '../../../shared/components/AppButton';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
+import { showToast } from '../../../utils/toast';
 
 const BRANCH_TYPE_KEYS: { value: string; labelKey: string }[] = [
   { value: 'collection', labelKey: 'branch.typeColl' },
@@ -37,6 +38,7 @@ export function CreateBranchScreen({ navigation }: Props) {
     contactPerson: string;
     city: string;
     state: string;
+    isSpecific: boolean;
     whEnabled: boolean;
     whStart: string;
     whEnd: string;
@@ -47,6 +49,7 @@ export function CreateBranchScreen({ navigation }: Props) {
     contactPerson: '',
     city: '',
     state: '',
+    isSpecific: false,
     whEnabled: false,
     whStart: '09:00',
     whEnd: '18:00',
@@ -61,6 +64,7 @@ export function CreateBranchScreen({ navigation }: Props) {
       contactPerson: form.contactPerson.trim(),
       ...(form.city.trim() && { city: form.city.trim() }),
       ...(form.state.trim() && { state: form.state.trim() }),
+      isSpecific: form.isSpecific,
       workingHours: {
         enabled: form.whEnabled,
         startTime: form.whStart.trim() || '09:00',
@@ -69,7 +73,8 @@ export function CreateBranchScreen({ navigation }: Props) {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
-      Alert.alert('Success', 'Branch created', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      showToast('success', 'Branch created');
+      navigation.goBack();
     },
   });
 
@@ -193,6 +198,40 @@ export function CreateBranchScreen({ navigation }: Props) {
           onSubmitEditing={handleSubmit}
           onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100)}
         />
+
+        {/* Specific Branch */}
+        <TouchableOpacity
+          onPress={() => setForm((f) => ({ ...f, isSpecific: !f.isSpecific }))}
+          activeOpacity={0.7}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingVertical: theme.spacing.sm,
+            paddingHorizontal: theme.spacing.md,
+            borderRadius: theme.borderRadius.md,
+            borderWidth: 1.5,
+            borderColor: form.isSpecific ? theme.colors.primary : theme.colors.border,
+            backgroundColor: form.isSpecific ? theme.colors.primary + '10' : theme.colors.inputBackground,
+            marginBottom: theme.spacing.md,
+          }}
+        >
+          <View style={{ flex: 1, marginRight: theme.spacing.md }}>
+            <Text style={[theme.typography.body, { color: theme.colors.text, fontWeight: '600' }]}>
+              Specific Branch
+            </Text>
+            <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}>
+              Mark as the one specific branch for this company (only one allowed)
+            </Text>
+          </View>
+          <View style={{
+            width: 44, height: 24, borderRadius: 12,
+            backgroundColor: form.isSpecific ? theme.colors.primary : theme.colors.border,
+            justifyContent: 'center', paddingHorizontal: 2,
+          }}>
+            <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', alignSelf: form.isSpecific ? 'flex-end' : 'flex-start' }} />
+          </View>
+        </TouchableOpacity>
 
         {/* Working Hours */}
         <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm, marginTop: theme.spacing.md }]}>

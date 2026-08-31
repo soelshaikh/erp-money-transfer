@@ -1,8 +1,9 @@
 import React, { useState, useRef, useLayoutEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, RefreshControl,
-  Alert, TextInput, KeyboardAvoidingView, Platform, Modal,
+  TextInput, KeyboardAvoidingView, Platform, Modal,
 } from 'react-native';
+import { showToast } from '../../../utils/toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
@@ -117,10 +118,10 @@ export function TenantListScreen({ navigation }: Props) {
         `${d.users ?? 0} users`,
         `${d.transactions ?? 0} transactions`,
       ].join(', ');
-      Alert.alert('Done', `Deleted: ${summary}. Super admin credentials kept.`);
+      showToast('success', 'Done', `Deleted: ${summary}. Super admin credentials kept.`);
     },
     onError: (err: any) => {
-      Alert.alert('Error', parseApiError(err) ?? 'Reset failed');
+      showToast('error', 'Error', parseApiError(err) ?? 'Reset failed');
     },
   });
 
@@ -132,7 +133,7 @@ export function TenantListScreen({ navigation }: Props) {
 
   const handleConfirmReset = () => {
     if (confirmText.trim() !== 'RESET') {
-      Alert.alert('Type RESET', 'Please type RESET exactly to confirm.');
+      showToast('info', 'Type RESET', 'Please type RESET exactly to confirm.');
       return;
     }
     resetMutation.mutate();

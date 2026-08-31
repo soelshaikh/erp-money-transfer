@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
@@ -8,6 +8,7 @@ import { AppButton } from '../../../shared/components/AppButton';
 import { AppCard } from '../../../shared/components/AppCard';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
+import { showToast } from '../../../utils/toast';
 import { fmtAmt } from '../../../utils/fmt';
 import { ImagePickerButton } from '../../../shared/components/ImagePickerButton';
 import { Ionicons } from '@expo/vector-icons';
@@ -62,14 +63,14 @@ export function CompleteByTokenScreen({ navigation }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
-      Alert.alert(
-        'Payment Complete',
-        `Token ${foundTx.tokenNumber} — ${fmtAmt(Number(foundTx.finalAmount))} paid successfully.`,
-        [{ text: 'Done', onPress: () => { setFoundTx(null); setTokenInput(''); setPayoutPhotoUrl(null); navigation.goBack(); } }],
-      );
+      showToast('success', 'Payment Complete', `Token ${foundTx.tokenNumber} — ${fmtAmt(Number(foundTx.finalAmount))} paid successfully.`);
+      setFoundTx(null);
+      setTokenInput('');
+      setPayoutPhotoUrl(null);
+      navigation.goBack();
     },
     onError: (e: any) => {
-      Alert.alert('Error', parseApiError(e) ?? 'Failed to complete payment');
+      showToast('error', 'Error', parseApiError(e) ?? 'Failed to complete payment');
     },
   });
 

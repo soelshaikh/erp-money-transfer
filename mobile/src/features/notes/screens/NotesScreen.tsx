@@ -155,7 +155,11 @@ export function NotesScreen() {
       <View style={styles.footer}>
         {mode === 'gate' && <Text style={styles.devHintText}>DEV: ERP@Secret2024</Text>}
         <Text style={styles.versionText}>v{APP_VERSION}</Text>
-        {mode === 'signedOff' && <Text style={styles.versionText}>—</Text>}
+        {mode === 'signedOff' && (
+          <TouchableOpacity onLongPress={() => clearSignOff()} delayLongPress={2000}>
+            <Text style={styles.versionText}>—</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
     </KeyboardAvoidingView>

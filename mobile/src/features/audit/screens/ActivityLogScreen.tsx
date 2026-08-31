@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { RefreshButton } from '../../../shared/components/RefreshButton';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
 import { DateRangeFilter } from '../../../shared/components/DateRangeFilter';
@@ -220,6 +222,7 @@ function LogRow({ log, theme }: LogRowProps) {
 export function ActivityLogScreen() {
   const { t } = useTranslation();
   const theme = useTheme();
+  const navigation = useNavigation<any>();
   const tabBarHeight = useBottomTabBarHeight();
 
   const [showFilters, setShowFilters] = useState(false);
@@ -249,6 +252,12 @@ export function ActivityLogScreen() {
 
   const logs = data?.pages.flatMap((p: any) => p.logs) ?? [];
   const total: number = data?.pages[0]?.total ?? 0;
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => <RefreshButton onPress={() => refetch()} isFetching={isFetching && !isFetchingNextPage} style={{ marginRight: 8 }} />,
+    });
+  }, [refetch, isFetching, isFetchingNextPage]);
 
   const applyFilters = () => {
     const f: any = {};

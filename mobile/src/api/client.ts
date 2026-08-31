@@ -1,5 +1,5 @@
 import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import { storage } from '../utils/storage';
 import { useAuthStore } from '../store/authStore';
 
 // In production set EXPO_PUBLIC_API_URL in your .env
@@ -16,7 +16,7 @@ export const apiClient = axios.create({
 // Attach access token to every request
 apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   console.log('[API] -->', config.method?.toUpperCase(), config.baseURL + config.url);
-  const token = await SecureStore.getItemAsync('accessToken');
+  const token = await storage.getItemAsync('accessToken');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -32,19 +32,19 @@ apiClient.interceptors.response.use(
 
       // Account disabled or device revoked — logout immediately, no retry
       if (errorCode === 'ACCOUNT_DISABLED' || errorCode === 'DEVICE_NOT_AUTHORIZED') {
-        await SecureStore.deleteItemAsync('accessToken');
-        await SecureStore.deleteItemAsync('refreshToken');
+        await storage.deleteItemAsync('accessToken');
+        await storage.deleteItemAsync('refreshToken');
         useAuthStore.getState().logout();
         return Promise.reject(error);
       }
 
       original._retry = true;
       try {
-        const refreshToken = await SecureStore.getItemAsync('refreshToken');
+        const refreshToken = await storage.getItemAsync('refreshToken');
         if (!refreshToken) throw new Error('No refresh token');
         const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
         const newToken = data.data.accessToken;
-        await SecureStore.setItemAsync('accessToken', newToken);
+        await storage.setItemAsync('accessToken', newToken);
         original.headers.Authorization = `Bearer ${newToken}`;
         return apiClient(original);
       } catch {

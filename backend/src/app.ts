@@ -47,6 +47,7 @@ export default function createApp(container: any) {
   app.use('/api/v1/commission-settlements', container.commissionSettlementRoutes(container.commissionSettlementController));
   app.use('/api/v1/hq-commission', container.hqCommissionRoutes(container.hqCommissionController));
   app.use('/api/v1/external-accounts', container.externalAccountRoutes(container.externalAccountController));
+  app.use('/api/v1/partner-transfers', container.partnerTransferRoutes(container.partnerTransferController));
   app.use('/api/v1/sign-off', container.signOffRoutes(container.signOffController));
 
   // 404

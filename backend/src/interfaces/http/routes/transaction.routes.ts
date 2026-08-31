@@ -14,6 +14,7 @@ export default function transactionRoutes(txController: any) {
   router.get('/commission-detail', txController.commissionDetail);
   router.get('/', txController.list);
   router.get('/:id', txController.getOne);
+  router.get('/:id/ledger-trail', txController.ledgerTrail);
 
   router.post(
     '/',

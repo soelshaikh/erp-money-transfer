@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { ConfirmSheet } from '../../../shared/components/ConfirmSheet';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +37,10 @@ export function SettingsScreen() {
   const navigation = useNavigation<any>();
   const { user, tenant, logout, signOff } = useAuthStore();
   const [signingOff, setSigningOff] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    title: string; message?: string; confirmLabel?: string;
+    destructive?: boolean; icon?: string; onConfirm: () => void;
+  } | null>(null);
   const { lang, setLang } = useLangStore();
   const isHeadOffice = (user as any)?.role === 'head_office';
   const isBranch = (user as any)?.role === 'branch';
@@ -47,32 +52,30 @@ export function SettingsScreen() {
   });
 
   const confirmLogout = () => {
-    Alert.alert(t('common.signOut'), t('common.signOutConfirm'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      { text: t('common.signOut'), style: 'destructive', onPress: logout },
-    ]);
+    setConfirmSheet({
+      title: t('common.signOut'),
+      message: t('common.signOutConfirm'),
+      confirmLabel: t('common.signOut'),
+      destructive: true,
+      onConfirm: logout,
+    });
   };
 
   const confirmSignOff = () => {
-    Alert.alert(
-      t('signOff.title'),
-      t('signOff.confirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('signOff.title'),
-          style: 'destructive',
-          onPress: async () => {
-            if (signingOff) return;
-            setSigningOff(true);
-            try {
-              await signOffApi.signOff();
-            } catch (_e) { /* ignore — still sign off locally */ }
-            await signOff((user as any)?._id || (user as any)?.id || '');
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      title: t('signOff.title'),
+      message: t('signOff.confirm'),
+      confirmLabel: t('signOff.title'),
+      destructive: true,
+      onConfirm: async () => {
+        if (signingOff) return;
+        setSigningOff(true);
+        try {
+          await signOffApi.signOff();
+        } catch (_e) { /* ignore — still sign off locally */ }
+        await signOff((user as any)?._id || (user as any)?.id || '');
+      },
+    });
   };
 
   if (isLoading) return <LoadingScreen />;
@@ -82,6 +85,7 @@ export function SettingsScreen() {
   const branding = (data as any)?.branding;
 
   return (
+    <>
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.colors.background }}
       contentContainerStyle={{ padding: theme.spacing.md }}
@@ -92,7 +96,7 @@ export function SettingsScreen() {
           <Text style={[theme.typography.h2, { color: theme.colors.primary }]}>{(user as any)?.name?.[0]?.toUpperCase()}</Text>
         </View>
         <Text style={[theme.typography.h3, { color: theme.colors.text }]}>{(user as any)?.name}</Text>
-        <Text style={[theme.typography.body, { color: theme.colors.textSecondary }]}>@{(user as any)?.username}</Text>
+        <Text style={[theme.typography.body, { color: theme.colors.textSecondary }]}>{(user as any)?.username}</Text>
         <Text style={[theme.typography.caption, { color: theme.colors.primary, marginTop: 4 }]}>{(user as any)?.role?.replace('_', ' ').toUpperCase()}</Text>
       </AppCard>
 
@@ -147,8 +151,10 @@ export function SettingsScreen() {
         <SettingRow label={t('settings.companyName')} value={branding?.appName || (tenant as any)?.name} theme={theme} />
         <View style={{ height: 1, backgroundColor: theme.colors.divider }} />
         <SettingRow label={t('settings.companyId')} value={(tenant as any)?.slug} theme={theme} />
+        {/* Timezone row hidden — not needed in UI
         <View style={{ height: 1, backgroundColor: theme.colors.divider }} />
         <SettingRow label={t('settings.timezone')} value={settings?.timezone} theme={theme} />
+        */}
         <View style={{ height: 1, backgroundColor: theme.colors.divider }} />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: theme.spacing.sm, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -319,5 +325,16 @@ export function SettingsScreen() {
       )}
       <AppButton title={t('common.signOut')} onPress={confirmLogout} variant="outline" />
     </ScrollView>
+    <ConfirmSheet
+      visible={!!confirmSheet}
+      title={confirmSheet?.title ?? ''}
+      message={confirmSheet?.message}
+      confirmLabel={confirmSheet?.confirmLabel}
+      destructive={confirmSheet?.destructive}
+      icon={confirmSheet?.icon}
+      onConfirm={() => { confirmSheet?.onConfirm(); setConfirmSheet(null); }}
+      onClose={() => setConfirmSheet(null)}
+    />
+    </>
   );
 }

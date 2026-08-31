@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import * as SecureStore from 'expo-secure-store';
+import { storage } from '../utils/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { queryClient } from '../api/queryClient';
 
@@ -52,16 +52,16 @@ export const useAuthStore = create<AuthState>((set) => ({
   signedOffUserId: null,
 
   login: async (userData: any, tenantData: any, accessToken: string, refreshToken: string) => {
-    await SecureStore.setItemAsync('accessToken', accessToken);
-    await SecureStore.setItemAsync('refreshToken', refreshToken);
+    await storage.setItemAsync('accessToken', accessToken);
+    await storage.setItemAsync('refreshToken', refreshToken);
     // Clear any lingering sign-off state on successful login
     await AsyncStorage.removeItem(SIGN_OFF_KEY);
     set({ user: userData, tenant: tenantData, isAuthenticated: true, isLoading: false, pendingDeviceInfo: null, pendingLoginParams: null, isSignedOff: false, signedOffDate: null, signedOffUserId: null });
   },
 
   logout: async () => {
-    await SecureStore.deleteItemAsync('accessToken');
-    await SecureStore.deleteItemAsync('refreshToken');
+    await storage.deleteItemAsync('accessToken');
+    await storage.deleteItemAsync('refreshToken');
     await AsyncStorage.removeItem(SIGN_OFF_KEY);
     queryClient.clear();
     set({ user: null, tenant: null, isAuthenticated: false, isLoading: false, pendingDeviceInfo: null, pendingLoginParams: null, isSignedOff: false, signedOffDate: null, signedOffUserId: null });
@@ -85,8 +85,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   signOff: async (userId: string) => {
     const date = todayIST();
-    await SecureStore.deleteItemAsync('accessToken');
-    await SecureStore.deleteItemAsync('refreshToken');
+    await storage.deleteItemAsync('accessToken');
+    await storage.deleteItemAsync('refreshToken');
     queryClient.clear();
     await AsyncStorage.setItem(SIGN_OFF_KEY, JSON.stringify({ date, userId }));
     set({

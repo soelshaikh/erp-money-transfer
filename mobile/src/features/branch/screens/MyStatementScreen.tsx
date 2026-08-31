@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useLayoutEffect } from 'react';
 import { View, Text, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -10,6 +10,8 @@ import { LoadingScreen } from '../../../shared/components/LoadingScreen';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { RefreshButton } from '../../../shared/components/RefreshButton';
 import { withAlpha } from '../../../utils/colors';
 import { fmtAmt, fmtDate, fmtTime } from '../../../utils/fmt';
 
@@ -38,6 +40,7 @@ function BalancePill({ label, value, theme }: { label: string; value: number; th
 export function MyStatementScreen() {
   const { t } = useTranslation();
   const theme = useTheme();
+  const navigation = useNavigation<any>();
   const [page, setPage] = useState(1);
   const limit = 30;
   const tabBarHeight = useBottomTabBarHeight();
@@ -49,12 +52,25 @@ export function MyStatementScreen() {
     payout_committed: { label: t('ledger.payoutApproved'), icon: 'time-outline', affectsLabel: t('ledger.effectiveOnly'), isActual: false },
     payout_completed: { label: t('ledger.payoutMade'), icon: 'arrow-up-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
     collection_reversed: { label: t('ledger.cancelled'), icon: 'close-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    commission_earned: { label: 'Commission Earned', icon: 'cash-outline', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    commission_payable: { label: 'Commission Payable', icon: 'swap-horizontal-outline', affectsLabel: t('ledger.effectiveOnly'), isActual: false },
+    commission_receivable: { label: 'Commission Receivable', icon: 'swap-horizontal-outline', affectsLabel: t('ledger.effectiveOnly'), isActual: false },
+    commission_settlement_out: { label: 'Commission Settled (Out)', icon: 'arrow-up-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    commission_settlement_in: { label: 'Commission Settled (In)', icon: 'arrow-down-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    hq_commission_out: { label: 'HQ Commission Settled', icon: 'arrow-up-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
+    hq_commission_in: { label: 'HQ Commission Received', icon: 'arrow-down-circle', affectsLabel: t('ledger.actualEffective'), isActual: true },
   };
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['my-ledger', page],
     queryFn: () => branchApi.getMyLedger({ page, limit }),
   });
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => <RefreshButton onPress={refetch} isFetching={isFetching} style={{ marginRight: 8 }} />,
+    });
+  }, [refetch, isFetching]);
 
   if (isLoading) return <LoadingScreen message={t('ledger.loading')} />;
 

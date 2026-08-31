@@ -29,7 +29,7 @@ import { todayIST } from '../../../utils/dateIST';
  *   balance − committedPayout − pendingPayout + payoutCompleted − commissionPayable
  *   (commissionReceivable excluded — not real cash until settlement completes)
  */
-function buildIncrement(event: string, amount: number): Record<string, number> {
+function buildIncrement(event: string, amount: number, committedPayoutOverride?: number): Record<string, number> {
   switch (event) {
     case 'collection':
       return { balance: amount };
@@ -41,8 +41,14 @@ function buildIncrement(event: string, amount: number): Record<string, number> {
       return { pendingPayout: -amount };
     case 'payout_committed':
       return { committedPayout: amount };
-    case 'payout_completed':
-      return { balance: -amount, committedPayout: -amount, payoutCompleted: amount };
+    case 'payout_completed': {
+      // committedPayoutOverride lets extra-mode completions debit the full payout amount
+      // (receiver gets full cash) while clearing only the originally-committed finalAmount.
+      // payoutCompleted always tracks the actual cash disbursed so the commission gain
+      // isn't cancelled out in the effective balance formula.
+      const cpClear = committedPayoutOverride ?? amount;
+      return { balance: -amount, committedPayout: -cpClear, payoutCompleted: amount };
+    }
     case 'commission_earned':
       return { balance: amount };
     case 'commission_payable':
@@ -57,6 +63,18 @@ function buildIncrement(event: string, amount: number): Record<string, number> {
       return { balance: -amount };
     case 'hq_commission_in':
       return { balance: amount };
+    case 'partner_deposit':
+      return { balance: amount };
+    case 'partner_due':
+      return { balance: -amount };
+    case 'partner_withdrawal':
+      return { balance: -amount };
+    case 'payout_committed_reversed':
+      return { committedPayout: -amount };
+    case 'partner_commission':
+      return { balance: amount };
+    case 'partner_commission_reversal':
+      return { balance: -amount };
     default:
       return {};
   }
@@ -64,9 +82,9 @@ function buildIncrement(event: string, amount: number): Record<string, number> {
 
 export default class MongoBranchLedgerRepository extends IBranchLedgerRepository {
   async addEntry(tenantId: any, branchId: any, {
-    transactionId, type, amount, description, event, tokenNumber,
+    transactionId, type, amount, description, event, tokenNumber, committedPayoutAmount,
   }: any) {
-    const inc = buildIncrement(event, amount);
+    const inc = buildIncrement(event, amount, committedPayoutAmount);
 
     // Atomic update — { new: false } returns the doc BEFORE the change
     const oldBranch = await BranchModel.findOneAndUpdate(
@@ -118,6 +136,13 @@ export default class MongoBranchLedgerRepository extends IBranchLedgerRepository
     ).catch(() => {});
 
     return { entry: entry.toObject() };
+  }
+
+  async findByTransaction(tenantId: any, transactionId: any) {
+    return BranchLedgerModel.find({ tenantId, transactionId })
+      .populate('branchId', 'name code')
+      .sort({ createdAt: 1 })
+      .lean();
   }
 
   async findByBranch(tenantId: any, branchId: any, filters: any = {}) {

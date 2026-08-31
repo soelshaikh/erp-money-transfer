@@ -43,16 +43,23 @@ export default class ApproveTransaction {
         const totalDeducted = transaction.amount;
         const dueAmount = totalDeducted - partnerCovered;
         const today = todayIST();
-        let runningBalance = partner.balance;
+        const collBranchId = transaction.collectionBranchId.toString();
+
+        // Use branch-specific balance for balanceBefore/After in ledger entries
+        const branchBalBefore = (partner.balances as any)?.get?.(collBranchId)
+          ?? (partner.balances as any)?.[collBranchId]
+          ?? partner.balance;
+        let runningBranchBalance = branchBalBefore;
 
         // Entry 1: consume the credit that was on hold
         if (partnerCovered > 0) {
-          const balBefore = runningBalance;
-          const balAfter = runningBalance - partnerCovered;
+          const balBefore = runningBranchBalance;
+          const balAfter = runningBranchBalance - partnerCovered;
           await ExternalLedgerModel.create({
             tenantId,
             externalAccountId: partner._id,
             transactionId: transaction._id,
+            branchId: transaction.collectionBranchId,
             type: 'withdrawal',
             direction: 'debit',
             amount: partnerCovered,
@@ -63,17 +70,18 @@ export default class ApproveTransaction {
             createdBy: userId,
             createdByName: actorName || null,
           });
-          runningBalance = balAfter;
+          runningBranchBalance = balAfter;
         }
 
         // Entry 2: due for amount beyond available credit
         if (dueAmount > 0) {
-          const balBefore = runningBalance;
-          const balAfter = runningBalance - dueAmount;
+          const balBefore = runningBranchBalance;
+          const balAfter = runningBranchBalance - dueAmount;
           await ExternalLedgerModel.create({
             tenantId,
             externalAccountId: partner._id,
             transactionId: transaction._id,
+            branchId: transaction.collectionBranchId,
             type: 'due',
             direction: 'debit',
             amount: dueAmount,
@@ -85,11 +93,9 @@ export default class ApproveTransaction {
             createdByName: actorName || null,
           });
         }
-
-        // Atomic: deduct full amount from balance, release onHold
         await ExternalAccountModel.updateOne(
           { _id: partner._id, tenantId },
-          { $inc: { balance: -totalDeducted, onHold: -partnerCovered } },
+          { $inc: { balance: -totalDeducted, [`onHolds.${collBranchId}`]: -partnerCovered, [`balances.${collBranchId}`]: -totalDeducted } },
         );
       }
     }

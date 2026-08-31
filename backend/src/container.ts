@@ -126,11 +126,21 @@ import UpdateExternalAccount from './application/use-cases/externalAccount/Updat
 import AddExternalEntry from './application/use-cases/externalAccount/AddExternalEntry';
 import GetExternalLedger from './application/use-cases/externalAccount/GetExternalLedger';
 
+// Use-cases — Partner Transfers
+import CreatePartnerTransfer from './application/use-cases/partnerTransfer/CreatePartnerTransfer';
+import ApprovePartnerTransfer from './application/use-cases/partnerTransfer/ApprovePartnerTransfer';
+import CompletePartnerTransfer from './application/use-cases/partnerTransfer/CompletePartnerTransfer';
+import CancelPartnerTransfer from './application/use-cases/partnerTransfer/CancelPartnerTransfer';
+import RejectPartnerTransfer from './application/use-cases/partnerTransfer/RejectPartnerTransfer';
+import GetPartnerTransfers from './application/use-cases/partnerTransfer/GetPartnerTransfers';
+
 // Controllers
 import ExternalAccountController from './interfaces/http/controllers/ExternalAccountController';
+import PartnerTransferController from './interfaces/http/controllers/PartnerTransferController';
 
 // Routes
 import externalAccountRoutes from './interfaces/http/routes/external-account.routes';
+import partnerTransferRoutes from './interfaces/http/routes/partnerTransfer.routes';
 
 // Use-cases — App Install
 import RegisterAppInstall from './application/use-cases/appInstall/RegisterAppInstall';
@@ -212,7 +222,7 @@ export default function buildContainer(io: any) {
   const getUsers = new GetUsers({ userRepository, tenantRepository });
   const resetPassword = new ResetPassword({ userRepository, auditService });
 
-  const createTransaction = new CreateTransaction({ transactionRepository, branchRepository, tenantRepository, notificationService, auditService, branchLedgerRepository, commissionPayableRepository });
+  const createTransaction = new CreateTransaction({ transactionRepository, branchRepository, tenantRepository, notificationService, auditService, branchLedgerRepository, commissionPayableRepository, hqCommissionItemRepository });
   const approveTransaction = new ApproveTransaction({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository, commissionPayableRepository });
   const rejectTransaction = new RejectTransaction({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository, commissionPayableRepository });
   const completePayment = new CompletePayment({ transactionRepository, notificationService, auditService, branchLedgerRepository, branchRepository, tenantRepository, commissionPayableRepository, hqCommissionItemRepository });
@@ -288,12 +298,20 @@ export default function buildContainer(io: any) {
   const unsuspendUser = new UnsuspendUser({ userRepository, auditService });
   const getUserActiveTransactions = new GetUserActiveTransactions({ userRepository, transactionRepository });
   const resetDevData = new ResetDevData();
-  const createExternalAccount = new CreateExternalAccount({ branchRepository });
+  const createExternalAccount = new CreateExternalAccount();
   const getExternalAccounts   = new GetExternalAccounts();
   const updateExternalAccount = new UpdateExternalAccount();
-  const addExternalEntry      = new AddExternalEntry();
+  const addExternalEntry      = new AddExternalEntry({ branchLedgerRepository });
   const getExternalLedger     = new GetExternalLedger();
   const externalAccountController = new ExternalAccountController({ createExternalAccount, getExternalAccounts, updateExternalAccount, addExternalEntry, getExternalLedger });
+
+  const createPartnerTransfer   = new CreatePartnerTransfer({ branchRepository, branchLedgerRepository });
+  const approvePartnerTransfer  = new ApprovePartnerTransfer();
+  const completePartnerTransfer = new CompletePartnerTransfer({ branchRepository, branchLedgerRepository });
+  const cancelPartnerTransfer   = new CancelPartnerTransfer({ branchLedgerRepository });
+  const rejectPartnerTransfer   = new RejectPartnerTransfer({ branchLedgerRepository });
+  const getPartnerTransfers     = new GetPartnerTransfers();
+  const partnerTransferController = new PartnerTransferController({ createPartnerTransfer, approvePartnerTransfer, completePartnerTransfer, cancelPartnerTransfer, rejectPartnerTransfer, getPartnerTransfers });
 
   const registerAppInstall = new RegisterAppInstall();
   const requestAppAccess   = new RequestAppAccess({ notificationService });
@@ -325,8 +343,8 @@ export default function buildContainer(io: any) {
     getPaymentMethodReport,
   });
   const auditLogController = new AuditLogController({ getAuditLogs });
-  const transactionController = new TransactionController({ createTransaction, approveTransaction, rejectTransaction, completePayment, getTransactions, getTransaction, transactionRepository });
-  const tenantController = new TenantController({ createTenant, updateTenantStatus, updateTenantBranchLimit, updateTenantStaffLimit, getTenants, tenantRepository, branchRepository, userRepository, createUser, resetDevData });
+  const transactionController = new TransactionController({ createTransaction, approveTransaction, rejectTransaction, completePayment, getTransactions, getTransaction, transactionRepository, branchLedgerRepository });
+  const tenantController = new TenantController({ createTenant, updateTenantStatus, updateTenantBranchLimit, updateTenantStaffLimit, getTenants, tenantRepository, branchRepository, userRepository, createUser, resetDevData, resetPassword });
   const dashboardController = new DashboardController({ getDashboard });
   const settingsController = new SettingsController({ getSettings, updateSettings });
   const deviceSessionController = new DeviceSessionController({ listDeviceSessions, approveDeviceSession, rejectDeviceSession, suspendDeviceSession, suspendAllSessions });
@@ -354,6 +372,8 @@ export default function buildContainer(io: any) {
     commissionSettlementRoutes,
     externalAccountController,
     externalAccountRoutes,
+    partnerTransferController,
+    partnerTransferRoutes,
     signOffController,
     signOffRoutes,
   };

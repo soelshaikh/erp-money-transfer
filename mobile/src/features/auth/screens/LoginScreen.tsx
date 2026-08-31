@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Image, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Image, TouchableOpacity, TextInput } from 'react-native';
+import { ConfirmSheet } from '../../../shared/components/ConfirmSheet';
 import Constants from 'expo-constants';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +29,10 @@ export function LoginScreen() {
     password: '',
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [confirmSheet, setConfirmSheet] = useState<{
+    title: string; message?: string; confirmLabel?: string;
+    destructive?: boolean; icon?: string; onConfirm: () => void;
+  } | null>(null);
 
   const deviceIdRef = useRef<string>('');
   const deviceNameRef = useRef<string>('');
@@ -83,15 +88,20 @@ export function LoginScreen() {
   };
 
   const handleTitleLongPress = () => {
-    Alert.alert(t('auth.resetConfig'), t('auth.resetConfigMsg'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      { text: t('auth.reset'), style: 'destructive', onPress: () => clearConfig() },
-    ]);
+    setConfirmSheet({
+      title: t('auth.resetConfig'),
+      message: t('auth.resetConfigMsg'),
+      confirmLabel: t('auth.reset'),
+      destructive: true,
+      icon: 'refresh-outline',
+      onConfirm: () => clearConfig(),
+    });
   };
 
   const apiError = parseApiError(mutation.error);
 
   return (
+    <>
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: theme.colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -170,5 +180,16 @@ export function LoginScreen() {
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
+    <ConfirmSheet
+      visible={!!confirmSheet}
+      title={confirmSheet?.title ?? ''}
+      message={confirmSheet?.message}
+      confirmLabel={confirmSheet?.confirmLabel}
+      destructive={confirmSheet?.destructive}
+      icon={confirmSheet?.icon}
+      onConfirm={() => { confirmSheet?.onConfirm(); setConfirmSheet(null); }}
+      onClose={() => setConfirmSheet(null)}
+    />
+    </>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { showToast } from '../../../utils/toast';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
@@ -9,7 +10,7 @@ import { AppInput } from '../../../shared/components/AppInput';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
 
-const USERNAME_PATTERN = /^[a-zA-Z0-9]+$/;
+const USERNAME_PATTERN = /^[a-z0-9@_]+$/;
 
 interface Props {
   route: any;
@@ -27,9 +28,8 @@ export function CreateHeadOfficeScreen({ route, navigation }: Props) {
   const mutation = useMutation({
     mutationFn: () => tenantApi.createHeadOffice(tenantId, form),
     onSuccess: (data: any) => {
-      Alert.alert('Account Created', `Head office account created.\nUsername: ${data.username || form.username}`, [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      showToast('success', 'Account Created', `Head office account created. Username: ${data.username || form.username}`);
+      navigation.goBack();
     },
   });
 
@@ -39,7 +39,7 @@ export function CreateHeadOfficeScreen({ route, navigation }: Props) {
     if (!form.username.trim()) {
       e.username = 'Username is required';
     } else if (!USERNAME_PATTERN.test(form.username)) {
-      e.username = 'Username must be alphanumeric only';
+      e.username = 'Only letters, numbers, @ and _';
     }
     if (form.password.length < 8) e.password = 'Password must be at least 8 characters';
     setErrors(e);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect } from 'react';
 import { View, Text, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
@@ -10,6 +10,7 @@ import { AppCard } from '../../../shared/components/AppCard';
 import { LoadingScreen } from '../../../shared/components/LoadingScreen';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { Ionicons } from '@expo/vector-icons';
+import { RefreshButton } from '../../../shared/components/RefreshButton';
 import { withAlpha } from '../../../utils/colors';
 import { fmtAmt } from '../../../utils/fmt';
 
@@ -23,6 +24,12 @@ export function CommissionSummaryScreen() {
     queryKey: ['commission-summary'],
     queryFn: () => transactionApi.getCommissionSummary(),
   });
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => <RefreshButton onPress={refetch} isFetching={isFetching} style={{ marginRight: 8 }} />,
+    });
+  }, [refetch, isFetching]);
 
   if (isLoading) return <LoadingScreen message={t('txn.loadingCommSummary')} />;
 

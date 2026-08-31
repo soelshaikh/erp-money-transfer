@@ -26,11 +26,9 @@ export default class ExternalAccountController {
   }
 
   async list(req: any, res: any) {
-    const { tenantId, role, branchId: userBranchId } = req.user;
-    const { status, branchId: queryBranchId } = req.query;
-    // Branch users see only their own branch's partners
-    const branchId = role === 'branch' ? userBranchId : (queryBranchId || undefined);
-    const result = await this.getExternalAccounts.execute({ tenantId, status, branchId });
+    const { tenantId, branchId, role } = req.user;
+    const { status } = req.query;
+    const result = await this.getExternalAccounts.execute({ tenantId, status, branchId, role });
     res.status(200).json({ success: true, data: result });
   }
 
@@ -44,20 +42,21 @@ export default class ExternalAccountController {
   async addEntry(req: any, res: any) {
     const { tenantId, id: createdBy, name: createdByName } = req.user;
     const { id: accountId } = req.params;
-    const { type, direction, amount, description, entryDate } = req.body;
+    const { type, direction, amount, description, entryDate, branchId } = req.body;
     const result = await this.addExternalEntry.execute({
       tenantId, accountId, type, direction,
       amount: Math.round(amount),
       description, entryDate, createdBy, createdByName,
+      branchId: branchId || null,
     });
     res.status(201).json({ success: true, data: result });
   }
 
   async getLedger(req: any, res: any) {
-    const { tenantId } = req.user;
+    const { tenantId, role, branchId } = req.user;
     const { id: accountId } = req.params;
     const { fromDate, toDate, limit } = req.query;
-    const result = await this.getExternalLedger.execute({ tenantId, accountId, fromDate, toDate, limit: limit ? parseInt(limit) : 200 });
+    const result = await this.getExternalLedger.execute({ tenantId, accountId, fromDate, toDate, limit: limit ? parseInt(limit) : 200, role, branchId });
     res.status(200).json({ success: true, data: result });
   }
 }

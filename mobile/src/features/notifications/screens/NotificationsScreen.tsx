@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { RefreshButton } from '../../../shared/components/RefreshButton';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
 import { withAlpha } from '../../../utils/colors';
@@ -89,14 +90,17 @@ export function NotificationsScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity onPress={() => markAllMutation.mutate()} style={{ marginRight: theme.spacing.md }}>
-          <Text style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '600' }]}>
-            {t('notifs.markAllRead')}
-          </Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: theme.spacing.sm }}>
+          <RefreshButton onPress={refetch} isFetching={isFetching} />
+          <TouchableOpacity onPress={() => markAllMutation.mutate()} style={{ padding: 4 }}>
+            <Text style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '600' }]}>
+              {t('notifs.markAllRead')}
+            </Text>
+          </TouchableOpacity>
+        </View>
       ),
     });
-  }, [navigation, theme]);
+  }, [navigation, theme, refetch, isFetching]);
 
   if (isLoading) return <LoadingScreen message={t('notifs.loading')} />;
   const notifications: any[] = data || [];

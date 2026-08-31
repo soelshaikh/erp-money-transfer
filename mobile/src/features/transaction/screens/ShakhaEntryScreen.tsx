@@ -1,4 +1,4 @@
-import React, { useRef, useState, useLayoutEffect, useCallback } from 'react';
+import React, { useRef, useState, useLayoutEffect, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   TextInput,
 } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,6 +19,7 @@ import { useAuthStore } from '../../../store/authStore';
 import { transactionApi } from '../api/transactionApi';
 import { branchApi } from '../../branch/api/branchApi';
 import { parseApiError } from '../../../utils/apiError';
+import { showToast } from '../../../utils/toast';
 import { withAlpha } from '../../../utils/colors';
 import { fmtAmt } from '../../../utils/fmt';
 import { todayIST } from '../../../utils/dateIST';
@@ -98,6 +98,78 @@ function Field({ label, icon, error, theme, children }: FieldProps) {
   );
 }
 
+// ─── Type-vs-Partner mode toggle ──────────────────────────────────────────────
+
+interface ModeToggleProps {
+  mode: 'type' | 'partner';
+  onChange: (mode: 'type' | 'partner') => void;
+  partnerDisabled?: boolean;
+  theme: any;
+}
+
+function ModeToggle({ mode, onChange, partnerDisabled, theme }: ModeToggleProps) {
+  const chip = (value: 'type' | 'partner', label: string, disabled?: boolean) => {
+    const selected = mode === value;
+    return (
+      <TouchableOpacity
+        onPress={() => !disabled && onChange(value)}
+        activeOpacity={0.7}
+        disabled={disabled}
+        style={{
+          paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1,
+          borderColor: selected ? theme.colors.primary : theme.colors.border,
+          backgroundColor: selected ? withAlpha(theme.colors.primary, 0.1) : 'transparent',
+          opacity: disabled ? 0.4 : 1,
+        }}
+      >
+        <Text style={{ fontSize: 10, fontWeight: '700', color: selected ? theme.colors.primary : theme.colors.textSecondary }}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+  return (
+    <View style={{ flexDirection: 'row', gap: 6 }}>
+      {chip('type', 'Type')}
+      {chip('partner', 'Partner', partnerDisabled)}
+    </View>
+  );
+}
+
+interface PartnerPickerButtonProps {
+  selected: any | null;
+  placeholder: string;
+  onPress: () => void;
+  theme: any;
+}
+
+function PartnerPickerButton({ selected, placeholder, onPress, theme }: PartnerPickerButtonProps) {
+  const avail = selected ? (selected.balance ?? 0) - (selected.onHold ?? 0) : 0;
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      style={{
+        flexDirection: 'row', alignItems: 'center',
+        borderWidth: 1, borderColor: theme.colors.border,
+        borderRadius: 8, paddingHorizontal: 10, paddingVertical: 12,
+        backgroundColor: theme.colors.surface, gap: 8,
+      }}
+    >
+      <Ionicons name="people-outline" size={15} color={theme.colors.primary} />
+      <Text style={{ flex: 1, color: selected ? theme.colors.text : theme.colors.textSecondary, fontSize: 14 }}>
+        {selected ? `${selected.code} — ${selected.name}` : placeholder}
+      </Text>
+      {selected && (
+        <Text style={{ fontSize: 11, fontWeight: '700', color: avail <= 0 ? theme.colors.error : theme.colors.success }} allowFontScaling={false}>
+          {fmtAmt(Math.max(0, avail))}
+        </Text>
+      )}
+      <Ionicons name="chevron-down" size={15} color={theme.colors.textSecondary} />
+    </TouchableOpacity>
+  );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -120,7 +192,7 @@ export function ShakhaEntryScreen({ navigation }: Props) {
   const [payoutBranchId, setPayoutBranchId] = useState<string | null>(null);
   const [mokalnarName, setMokalnarName] = useState('');
   const [mokalnarMobile, setMokalnarMobile] = useState('');
-  const [commissionSide, setCommissionSide] = useState<'collection' | 'payout' | 'payout_extra'>('collection');
+  const [commissionSide, setCommissionSide] = useState<'collection' | 'payout'>('collection');
   const [overrideCommission, setOverrideCommission] = useState(false);
   const [commissionType, setCommissionType] = useState<'flat' | 'percentage'>('flat');
   const [commissionValue, setCommissionValue] = useState('');
@@ -128,8 +200,12 @@ export function ShakhaEntryScreen({ navigation }: Props) {
   const [collectionPhotoUrl, setCollectionPhotoUrl] = useState<string | null>(null);
   const [customerTokenNo, setCustomerTokenNo] = useState('');
   const [externalAccountId, setExternalAccountId] = useState<string | null>(null);
+  const [payoutExternalAccountId, setPayoutExternalAccountId] = useState<string | null>(null);
+  const [mokalnarMode, setMokalnarMode] = useState<'type' | 'partner'>('type');
+  const [lenarMode, setLenarMode] = useState<'type' | 'partner'>('type');
   const [showMukabam, setShowMukabam] = useState(false);
   const [showPartnerModal, setShowPartnerModal] = useState(false);
+  const [showLenarPartnerModal, setShowLenarPartnerModal] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // keyboard refs
@@ -157,12 +233,38 @@ export function ShakhaEntryScreen({ navigation }: Props) {
     queryFn: () => externalAccountApi.list('active'),
     staleTime: 60_000,
   });
+  const { data: payoutPartnersData } = useQuery({
+    queryKey: ['external-accounts', 'active', payoutBranchId],
+    queryFn: () => externalAccountApi.list('active', payoutBranchId!),
+    enabled: !!payoutBranchId,
+    staleTime: 60_000,
+  });
   const allBranches: any[] = (branchesData as any) || [];
   const myBranch = allBranches.find((b: any) => b._id === user?.branchId);
   const payoutBranches = allBranches.filter((b: any) => b._id !== user?.branchId);
   const selectedBranch = payoutBranches.find((b: any) => b._id === payoutBranchId);
   const myPartners: any[] = (partnersData as any) || [];
   const selectedPartner = myPartners.find((p: any) => p._id === externalAccountId) || null;
+  const payoutPartners: any[] = (payoutPartnersData as any) || [];
+  const selectedPayoutPartner = payoutPartners.find((p: any) => p._id === payoutExternalAccountId) || null;
+
+  // Special branch: internal branch — no default commission, override-only
+  const isSpecialTransaction = !!(myBranch?.isSpecific || selectedBranch?.isSpecific);
+
+  // Payout branch changed — the previously selected payout-side partner no longer applies
+  useEffect(() => {
+    setPayoutExternalAccountId(null);
+    if (!payoutBranchId) setLenarMode('type');
+  }, [payoutBranchId]);
+
+  // When a special branch is involved, reset commission state
+  useEffect(() => {
+    if (isSpecialTransaction) {
+      setOverrideCommission(false);
+      setCommissionSide('collection');
+      setCommissionValue('');
+    }
+  }, [isSpecialTransaction]);
 
   // today's entries
   const { data: todayRaw, refetch: refetchToday } = useQuery({
@@ -208,6 +310,9 @@ export function ShakhaEntryScreen({ navigation }: Props) {
     setCollectionPhotoUrl(null);
     setCustomerTokenNo('');
     setExternalAccountId(null);
+    setPayoutExternalAccountId(null);
+    setMokalnarMode('type');
+    setLenarMode('type');
     setErrors({});
   }, []);
 
@@ -229,10 +334,16 @@ export function ShakhaEntryScreen({ navigation }: Props) {
     mutationFn: async () => {
       const parts: string[] = [];
       if (vigat.trim()) parts.push(vigat.trim());
-      if (lenarName.trim() || lenarMobile.trim())
+      if (lenarMode === 'partner' && selectedPayoutPartner) {
+        parts.push(`L: ${selectedPayoutPartner.code} ${selectedPayoutPartner.name}`);
+      } else if (lenarName.trim() || lenarMobile.trim()) {
         parts.push(`L: ${[lenarName.trim(), lenarMobile.trim()].filter(Boolean).join(' ')}`);
-      if (mokalnarName.trim() || mokalnarMobile.trim())
+      }
+      if (mokalnarMode === 'partner' && selectedPartner) {
+        parts.push(`M: ${selectedPartner.code} ${selectedPartner.name}`);
+      } else if (mokalnarName.trim() || mokalnarMobile.trim()) {
         parts.push(`M: ${[mokalnarName.trim(), mokalnarMobile.trim()].filter(Boolean).join(' ')}`);
+      }
 
       const idempotencyKey = `txn-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       return transactionApi.create(
@@ -248,7 +359,8 @@ export function ShakhaEntryScreen({ navigation }: Props) {
           ...(canOverride && overrideCommission && {
             commissionOverride: { type: commissionType, value: parseFloat(commissionValue) || 0 },
           }),
-          ...(externalAccountId && { externalAccountId }),
+          ...(mokalnarMode === 'partner' && externalAccountId && { externalAccountId }),
+          ...(lenarMode === 'partner' && payoutExternalAccountId && { payoutExternalAccountId }),
         },
         idempotencyKey,
       );
@@ -256,12 +368,13 @@ export function ShakhaEntryScreen({ navigation }: Props) {
     onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['external-accounts'] });
       refetchToday();
       clearForm();
-      Alert.alert(t('common.success'), `Token: ${data.tokenNumber}\n${fmtAmt(Number(data.amount))}`);
+      showToast('success', t('common.success'), `Token: ${data.tokenNumber} · ${fmtAmt(Number(data.amount))}`);
     },
     onError: (err: any) => {
-      Alert.alert('Error', parseApiError(err) || 'Something went wrong');
+      showToast('error', 'Error', parseApiError(err) || 'Something went wrong');
     },
   });
 
@@ -315,42 +428,43 @@ export function ShakhaEntryScreen({ navigation }: Props) {
             </Field>
           </View>
 
-          {/* Commission side */}
-          <View style={{ marginBottom: 12 }}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 6 }}>
-              {t('txn.commissionSide')}
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {([
-                { value: 'collection',   label: t('txn.senderPays'),        sub: t('txn.senderPaysSub') },
-                { value: 'payout',       label: t('txn.receiverPays'),      sub: t('txn.receiverPaysSub') },
-                { value: 'payout_extra', label: t('txn.receiverPaysExtra'), sub: t('txn.receiverPaysExtraSub') },
-              ] as const).map((opt) => {
-                const sel = commissionSide === opt.value;
-                return (
-                  <TouchableOpacity
-                    key={opt.value}
-                    onPress={() => setCommissionSide(opt.value)}
-                    activeOpacity={0.7}
-                    style={{
-                      flex: 1, paddingVertical: 9, paddingHorizontal: 8,
-                      borderRadius: 8, borderWidth: 1.5,
-                      borderColor: sel ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: sel ? withAlpha(theme.colors.primary, 0.08) : theme.colors.surface,
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: sel ? theme.colors.primary : theme.colors.text, marginBottom: 1 }}>
-                      {opt.label}
-                    </Text>
-                    <Text style={{ fontSize: 10, color: sel ? theme.colors.primary : theme.colors.textSecondary }} allowFontScaling={false}>
-                      {opt.sub}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+          {/* Commission side — hidden for special (internal) branches */}
+          {!isSpecialTransaction && (
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 6 }}>
+                {t('txn.commissionSide')}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {([
+                  { value: 'collection', label: t('txn.senderPays'),   sub: t('txn.senderPaysSub') },
+                  { value: 'payout',     label: t('txn.receiverPays'), sub: t('txn.receiverPaysSub') },
+                ] as const).map((opt) => {
+                  const sel = commissionSide === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      onPress={() => setCommissionSide(opt.value)}
+                      activeOpacity={0.7}
+                      style={{
+                        flex: 1, paddingVertical: 9, paddingHorizontal: 8,
+                        borderRadius: 8, borderWidth: 1.5,
+                        borderColor: sel ? theme.colors.primary : theme.colors.border,
+                        backgroundColor: sel ? withAlpha(theme.colors.primary, 0.08) : theme.colors.surface,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: sel ? theme.colors.primary : theme.colors.text, marginBottom: 1 }}>
+                        {opt.label}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: sel ? theme.colors.primary : theme.colors.textSecondary }} allowFontScaling={false}>
+                        {opt.sub}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Mukkam dropdown */}
           <View style={{ marginBottom: 12 }}>
@@ -377,41 +491,6 @@ export function ShakhaEntryScreen({ navigation }: Props) {
               <Text style={{ fontSize: 11, color: theme.colors.error, marginTop: 3 }}>{errors.mukbam}</Text>
             )}
           </View>
-
-          {/* Partner dropdown — only shown if branch has active partners */}
-          {myPartners.length > 0 && (
-            <View style={{ marginBottom: 12 }}>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 4 }}>
-                Partner (Optional)
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowPartnerModal(true)}
-                activeOpacity={0.7}
-                style={{
-                  flexDirection: 'row', alignItems: 'center',
-                  borderWidth: 1, borderColor: theme.colors.border,
-                  borderRadius: 8, paddingHorizontal: 10, paddingVertical: 12,
-                  backgroundColor: theme.colors.surface, gap: 8,
-                }}
-              >
-                <Ionicons name="people-outline" size={15} color={theme.colors.primary} />
-                <Text style={{ flex: 1, color: selectedPartner ? theme.colors.text : theme.colors.textSecondary, fontSize: 14 }}>
-                  {selectedPartner
-                    ? `${selectedPartner.code} — ${selectedPartner.name}`
-                    : '— None —'}
-                </Text>
-                {selectedPartner && (() => {
-                  const avail = (selectedPartner.balance ?? 0) - (selectedPartner.onHold ?? 0);
-                  return (
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: avail <= 0 ? theme.colors.error : theme.colors.success }} allowFontScaling={false}>
-                      {fmtAmt(Math.max(0, avail))}
-                    </Text>
-                  );
-                })()}
-                <Ionicons name="chevron-down" size={15} color={theme.colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-          )}
 
           {/* Commission override — inline, before preview */}
           {canOverride && (
@@ -492,12 +571,12 @@ export function ShakhaEntryScreen({ navigation }: Props) {
             </View>
           )}
 
-          {/* Live commission preview — reacts to override values */}
-          {(() => {
+          {/* Live commission preview — hidden for special (internal) branches */}
+          {!isSpecialTransaction && (() => {
             const parsedAmt = parseFloat(amount) || 0;
             if (parsedAmt <= 0 || !payoutBranchId) return null;
             const globalComm = (settingsData as any)?.settings?.commission || {};
-            const isPayoutSide = commissionSide === 'payout' || commissionSide === 'payout_extra';
+            const isPayoutSide = commissionSide === 'payout';
             const sourceBranch = isPayoutSide ? selectedBranch : myBranch;
             const isOverrideActive = overrideCommission && canOverride && !!commissionValue;
             const isBranchConfig = !isOverrideActive && !!sourceBranch?.commissionConfig?.enabled;
@@ -532,9 +611,7 @@ export function ShakhaEntryScreen({ navigation }: Props) {
                     <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.text }} allowFontScaling={false}>₹{senderPays.toLocaleString('en-IN')}</Text>
                   </View>
                   <View>
-                    <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>
-                      {commissionSide === 'payout_extra' ? 'Extra (receiver)' : 'Commission'}
-                    </Text>
+                    <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>Commission</Text>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: accentColor }} allowFontScaling={false}>₹{cAmount.toLocaleString('en-IN')}</Text>
                   </View>
                   <View>
@@ -546,36 +623,58 @@ export function ShakhaEntryScreen({ navigation }: Props) {
             );
           })()}
 
-          {/* Row 2: Lenar Name + Lenar Mobile */}
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-            <Field label={t('txn.receiverName')} icon="person-outline" theme={theme}>
-              <TextInput
-                ref={lenarNameRef}
-                style={tin}
-                value={lenarName}
-                onChangeText={setLenarName}
-                placeholder={t('txn.receiverDeducted')}
-                placeholderTextColor={theme.colors.textSecondary}
-                returnKeyType="next"
-                autoCapitalize="words"
-                onSubmitEditing={() => lenarMobileRef.current?.focus()}
-                blurOnSubmit={false}
+          {/* Lenar (receiver) — type manually, or select a partner belonging to the payout branch */}
+          <View style={{ marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary }}>
+                {t('txn.receiverName')}
+              </Text>
+              <ModeToggle
+                mode={lenarMode}
+                onChange={setLenarMode}
+                partnerDisabled={!payoutBranchId || payoutPartners.length === 0}
+                theme={theme}
               />
-            </Field>
-            <Field label={t('txn.receiverMobile')} icon="call-outline" theme={theme}>
-              <TextInput
-                ref={lenarMobileRef}
-                style={tin}
-                value={lenarMobile}
-                onChangeText={setLenarMobile}
-                placeholder={t('txn.mobilePlaceholder')}
-                placeholderTextColor={theme.colors.textSecondary}
-                keyboardType="phone-pad"
-                returnKeyType="next"
-                onSubmitEditing={() => vigatRef.current?.focus()}
-                blurOnSubmit={false}
+            </View>
+            {lenarMode === 'partner' ? (
+              <PartnerPickerButton
+                selected={selectedPayoutPartner}
+                placeholder={payoutBranchId ? '— None —' : 'Select payout branch first'}
+                onPress={() => setShowLenarPartnerModal(true)}
+                theme={theme}
               />
-            </Field>
+            ) : (
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Field label={t('txn.receiverName')} icon="person-outline" theme={theme}>
+                  <TextInput
+                    ref={lenarNameRef}
+                    style={tin}
+                    value={lenarName}
+                    onChangeText={setLenarName}
+                    placeholder={t('txn.receiverDeducted')}
+                    placeholderTextColor={theme.colors.textSecondary}
+                    returnKeyType="next"
+                    autoCapitalize="words"
+                    onSubmitEditing={() => lenarMobileRef.current?.focus()}
+                    blurOnSubmit={false}
+                  />
+                </Field>
+                <Field label={t('txn.receiverMobile')} icon="call-outline" theme={theme}>
+                  <TextInput
+                    ref={lenarMobileRef}
+                    style={tin}
+                    value={lenarMobile}
+                    onChangeText={setLenarMobile}
+                    placeholder={t('txn.mobilePlaceholder')}
+                    placeholderTextColor={theme.colors.textSecondary}
+                    keyboardType="phone-pad"
+                    returnKeyType="next"
+                    onSubmitEditing={() => vigatRef.current?.focus()}
+                    blurOnSubmit={false}
+                  />
+                </Field>
+              </View>
+            )}
           </View>
 
           {/* Vigat — full width */}
@@ -596,36 +695,58 @@ export function ShakhaEntryScreen({ navigation }: Props) {
             </Field>
           </View>
 
-          {/* Row: Mokalnar + Mobile */}
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-            <Field label={t('txn.senderName')} icon="send-outline" theme={theme}>
-              <TextInput
-                ref={mokalnarNameRef}
-                style={tin}
-                value={mokalnarName}
-                onChangeText={setMokalnarName}
-                placeholder={t('txn.senderAdded')}
-                placeholderTextColor={theme.colors.textSecondary}
-                returnKeyType="next"
-                autoCapitalize="words"
-                onSubmitEditing={() => mokalnarMobileRef.current?.focus()}
-                blurOnSubmit={false}
+          {/* Mokalnar (sender) — type manually, or select a partner belonging to this branch */}
+          <View style={{ marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary }}>
+                {t('txn.senderName')}
+              </Text>
+              <ModeToggle
+                mode={mokalnarMode}
+                onChange={setMokalnarMode}
+                partnerDisabled={myPartners.length === 0}
+                theme={theme}
               />
-            </Field>
-            <Field label={t('txn.senderMobile')} icon="call-outline" theme={theme}>
-              <TextInput
-                ref={mokalnarMobileRef}
-                style={tin}
-                value={mokalnarMobile}
-                onChangeText={setMokalnarMobile}
-                placeholder={t('txn.mobilePlaceholder')}
-                placeholderTextColor={theme.colors.textSecondary}
-                keyboardType="phone-pad"
-                returnKeyType="next"
-                onSubmitEditing={() => customerTokenNoRef.current?.focus()}
-                blurOnSubmit={false}
+            </View>
+            {mokalnarMode === 'partner' ? (
+              <PartnerPickerButton
+                selected={selectedPartner}
+                placeholder="— None —"
+                onPress={() => setShowPartnerModal(true)}
+                theme={theme}
               />
-            </Field>
+            ) : (
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Field label={t('txn.senderName')} icon="send-outline" theme={theme}>
+                  <TextInput
+                    ref={mokalnarNameRef}
+                    style={tin}
+                    value={mokalnarName}
+                    onChangeText={setMokalnarName}
+                    placeholder={t('txn.senderAdded')}
+                    placeholderTextColor={theme.colors.textSecondary}
+                    returnKeyType="next"
+                    autoCapitalize="words"
+                    onSubmitEditing={() => mokalnarMobileRef.current?.focus()}
+                    blurOnSubmit={false}
+                  />
+                </Field>
+                <Field label={t('txn.senderMobile')} icon="call-outline" theme={theme}>
+                  <TextInput
+                    ref={mokalnarMobileRef}
+                    style={tin}
+                    value={mokalnarMobile}
+                    onChangeText={setMokalnarMobile}
+                    placeholder={t('txn.mobilePlaceholder')}
+                    placeholderTextColor={theme.colors.textSecondary}
+                    keyboardType="phone-pad"
+                    returnKeyType="next"
+                    onSubmitEditing={() => customerTokenNoRef.current?.focus()}
+                    blurOnSubmit={false}
+                  />
+                </Field>
+              </View>
+            )}
           </View>
 
           {/* Customer Token (optional) */}
@@ -933,7 +1054,7 @@ export function ShakhaEntryScreen({ navigation }: Props) {
               borderBottomColor: theme.colors.border,
             }}>
               <Text style={{ fontWeight: '700', fontSize: 16, color: theme.colors.text }}>
-                Select Partner
+                Select Mokalnar Partner
               </Text>
               <TouchableOpacity onPress={() => setShowPartnerModal(false)} activeOpacity={0.7}>
                 <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
@@ -981,6 +1102,96 @@ export function ShakhaEntryScreen({ navigation }: Props) {
                       {!isNone && (
                         <Text style={{ fontSize: 12, color: avail <= 0 ? theme.colors.error : theme.colors.success, fontWeight: '600' }} allowFontScaling={false}>
                           {fmtAmt(Math.max(0, avail))} avail
+                        </Text>
+                      )}
+                    </View>
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Lenar partner picker modal ─────────────────────── */}
+      <Modal
+        visible={showLenarPartnerModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowLenarPartnerModal(false)}
+      >
+        <View style={{ flex: 1 }}>
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
+            activeOpacity={1}
+            onPress={() => setShowLenarPartnerModal(false)}
+          />
+          <View style={{
+            backgroundColor: theme.colors.surface,
+            borderTopLeftRadius: 16,
+            borderTopRightRadius: 16,
+            maxHeight: '55%',
+          }}>
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.colors.border,
+            }}>
+              <Text style={{ fontWeight: '700', fontSize: 16, color: theme.colors.text }}>
+                Select Lenar Partner
+              </Text>
+              <TouchableOpacity onPress={() => setShowLenarPartnerModal(false)} activeOpacity={0.7}>
+                <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={[{ _id: null, code: '—', name: 'None', balance: 0, onHold: 0 }, ...payoutPartners]}
+              keyExtractor={(item: any) => item._id ?? 'none'}
+              removeClippedSubviews
+              maxToRenderPerBatch={10}
+              windowSize={5}
+              initialNumToRender={10}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }: { item: any }) => {
+                const isNone = item._id === null;
+                const isSelected = isNone ? !payoutExternalAccountId : payoutExternalAccountId === item._id;
+                const avail = isNone ? 0 : (item.balance ?? 0) - (item.onHold ?? 0);
+                return (
+                  <TouchableOpacity
+                    onPress={() => { setPayoutExternalAccountId(isNone ? null : item._id); setShowLenarPartnerModal(false); }}
+                    activeOpacity={0.7}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 16,
+                      paddingVertical: 13,
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.colors.border,
+                      backgroundColor: isSelected ? withAlpha(theme.colors.primary, 0.08) : 'transparent',
+                      gap: 12,
+                    }}
+                  >
+                    <View style={{
+                      width: 40, height: 40, borderRadius: 20,
+                      backgroundColor: withAlpha(theme.colors.primary, 0.12),
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Text style={{ fontWeight: '700', color: theme.colors.primary, fontSize: 11 }} allowFontScaling={false}>
+                        {item.code}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontWeight: '600', color: theme.colors.text, fontSize: 14 }}>{item.name}</Text>
+                      {!isNone && (
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, fontWeight: '600' }} allowFontScaling={false}>
+                          {fmtAmt(Math.max(0, avail))} balance
                         </Text>
                       )}
                     </View>

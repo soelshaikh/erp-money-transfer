@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
@@ -20,6 +20,7 @@ import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
 import { withAlpha } from '../../../utils/colors';
 import { fmtAmt, fmtDate } from '../../../utils/fmt';
+import { showToast } from '../../../utils/toast';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -197,7 +198,7 @@ export function ReportsScreen() {
         endDate: activeFilters.endDate,
       });
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Export failed. Please try again.');
+      showToast('error', 'Export failed', err?.message || 'Please try again.');
     } finally {
       setIsExporting(false);
     }

@@ -13,6 +13,7 @@ export default class GetSettings {
     const tenant = await this.tenantRepository.findById(tenantId);
     if (!tenant) throw new NotFoundError('Tenant');
     return {
+      businessType: tenant.businessType,
       branding: tenant.branding,
       features: tenant.features,
       settings: tenant.settings,

@@ -1,5 +1,7 @@
-import React from 'react';
-import { View, Text, ScrollView, Alert, RefreshControl, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, RefreshControl, Platform } from 'react-native';
+import { showToast } from '../../../utils/toast';
+import { ConfirmSheet } from '../../../shared/components/ConfirmSheet';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
@@ -43,29 +45,40 @@ function AuditRow({ icon, label, name, time, color, theme }: {
 function LineItemRow({ item, theme, t }: { item: HQCommissionItem; theme: any; t: any }) {
   return (
     <View style={{
-      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
       paddingVertical: theme.spacing.sm,
       borderBottomWidth: 1, borderBottomColor: theme.colors.divider,
     }}>
-      <View style={{ flex: 1 }}>
-        <Text
-          style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '700', fontFamily: Platform.select({ ios: 'Courier New', android: 'monospace' }) }]}
-          allowFontScaling={false}
-        >
-          {item.tokenNumber}
-        </Text>
-        <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
-          {t('hqComm.totalCommission')}: {fmtAmt(item.commissionAmount)}
-        </Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={{ flex: 1 }}>
+          <Text
+            style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '700', fontFamily: Platform.select({ ios: 'Courier New', android: 'monospace' }) }]}
+            allowFontScaling={false}
+          >
+            {item.tokenNumber}
+          </Text>
+          <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+            {t('hqComm.totalCommission')}: {fmtAmt(item.commissionAmount)}
+          </Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+            {item.hqSharePct}% {t('hqComm.hqShare')}
+          </Text>
+          <Text style={[theme.typography.body, { color: theme.colors.error, fontWeight: '700' }]} allowFontScaling={false}>
+            {fmtAmt(item.hqShareAmount)}
+          </Text>
+        </View>
       </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
-          {item.hqSharePct}% {t('hqComm.hqShare')}
-        </Text>
-        <Text style={[theme.typography.body, { color: theme.colors.error, fontWeight: '700' }]} allowFontScaling={false}>
-          {fmtAmt(item.hqShareAmount)}
-        </Text>
-      </View>
+      {!!item.otherBranchId && (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: theme.spacing.xs }}>
+          <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
+            Owed to {item.otherBranchName || 'other branch'} / HO's own
+          </Text>
+          <Text style={[theme.typography.caption, { color: theme.colors.text }]} allowFontScaling={false}>
+            {fmtAmt(item.otherBranchShareAmount || 0)} / {fmtAmt(item.headOfficeOwnShareAmount || 0)}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -86,6 +99,11 @@ export function HQCommissionSettlementDetailScreen({ route, navigation }: Props)
   const user = useAuthStore((s: any) => s.user);
   const isHO = user?.role === 'head_office';
 
+  const [confirmSheet, setConfirmSheet] = useState<{
+    title: string; message?: string; confirmLabel?: string;
+    destructive?: boolean; icon?: string; onConfirm: () => void;
+  } | null>(null);
+
   const { data: settlement, isLoading, isFetching, refetch } = useQuery<HQCommissionSettlementWithItems>({
     queryKey: ['hqCommissionSettlement', settlementId],
     queryFn: () => hqCommissionApi.getSettlement(settlementId),
@@ -100,21 +118,19 @@ export function HQCommissionSettlementDetailScreen({ route, navigation }: Props)
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['branchLedger'] });
     },
-    onError: (e: any) => Alert.alert('Error', parseApiError(e) ?? 'Failed to complete settlement'),
+    onError: (e: any) => showToast('error', 'Error', parseApiError(e) ?? 'Failed to complete settlement'),
   });
 
   const handleComplete = () => {
     if (!settlement) return;
-    Alert.alert(
-      t('hqComm.markReceived'),
-      t('hqComm.markReceivedConfirm')
+    setConfirmSheet({
+      title: t('hqComm.markReceived'),
+      message: t('hqComm.markReceivedConfirm')
         .replace('{branch}', settlement.branchName)
         .replace('{amount}', fmtAmt(settlement.totalHQShare)),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('hqComm.markReceived'), onPress: () => completeMutation.mutate() },
-      ],
-    );
+      confirmLabel: t('hqComm.markReceived'),
+      onConfirm: () => completeMutation.mutate(),
+    });
   };
 
   if (isLoading) return <LoadingScreen message={t('hqComm.loading')} />;
@@ -129,6 +145,7 @@ export function HQCommissionSettlementDetailScreen({ route, navigation }: Props)
   const canComplete = isPending && isHO;
 
   return (
+    <>
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.colors.background }}
       contentContainerStyle={{ padding: theme.spacing.md, paddingBottom: 40 }}
@@ -265,5 +282,16 @@ export function HQCommissionSettlementDetailScreen({ route, navigation }: Props)
         </AppCard>
       )}
     </ScrollView>
+    <ConfirmSheet
+      visible={!!confirmSheet}
+      title={confirmSheet?.title ?? ''}
+      message={confirmSheet?.message}
+      confirmLabel={confirmSheet?.confirmLabel}
+      destructive={confirmSheet?.destructive}
+      icon={confirmSheet?.icon}
+      onConfirm={() => { confirmSheet?.onConfirm(); setConfirmSheet(null); }}
+      onClose={() => setConfirmSheet(null)}
+    />
+    </>
   );
 }

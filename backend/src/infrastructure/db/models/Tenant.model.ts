@@ -33,10 +33,20 @@ const workingHoursSchema = new mongoose.Schema({
   endTime: { type: String, default: '18:00' },   // HH:MM IST
 }, { _id: false });
 
+// Enterprise-only: how a transaction's commission splits between the earning branch,
+// the other branch on the transaction, and Head Office. branchPct applies once to each
+// branch; 2*branchPct + headOfficePct must equal 100. Null until configured — enterprise
+// tenants cannot create transactions until this is set (see CreateTransaction.ts).
+const commissionSplitSchema = new mongoose.Schema({
+  branchPct: { type: Number, default: null, min: 0, max: 50 },
+  headOfficePct: { type: Number, default: null, min: 0, max: 100 },
+}, { _id: false });
+
 const settingsSchema = new mongoose.Schema({
   otpExpiryMinutes: { type: Number, default: 10 },
   smsTemplateId: { type: String, default: null },
   commission: { type: commissionSchema, default: () => ({}) },
+  commissionSplit: { type: commissionSplitSchema, default: () => ({}) },
   timezone: { type: String, default: 'Asia/Kolkata' },
   loginTimeRestriction: { type: Boolean, default: false },
   transactionLimits: { type: transactionLimitsSchema, default: () => ({}) },
@@ -50,6 +60,7 @@ const tenantSchema = new mongoose.Schema({
   contactPhone: { type: String, trim: true },
   address: { type: String, trim: true },
   status: { type: String, enum: ['active', 'inactive', 'suspended'], default: 'active' },
+  businessType: { type: String, enum: ['enterprise', 'aangadia'], required: true, default: 'enterprise' },
   branding: { type: brandingSchema, default: () => ({}) },
   features: { type: featuresSchema, default: () => ({}) },
   settings: { type: settingsSchema, default: () => ({}) },

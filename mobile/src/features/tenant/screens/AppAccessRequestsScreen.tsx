@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  ActivityIndicator, RefreshControl, Alert,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
+import { showToast } from '../../../utils/toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../../theme/TenantThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +11,7 @@ import { withAlpha } from '../../../utils/colors';
 import { AppCard } from '../../../shared/components/AppCard';
 import { LoadingScreen } from '../../../shared/components/LoadingScreen';
 import { EmptyState } from '../../../shared/components/EmptyState';
+import { ConfirmSheet } from '../../../shared/components/ConfirmSheet';
 import { parseApiError } from '../../../utils/apiError';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { appAccessApi } from '../api/appAccessApi';
@@ -35,6 +37,10 @@ export function AppAccessRequestsScreen() {
   const qc = useQueryClient();
   const tabBarHeight = useBottomTabBarHeight();
   const [filter, setFilter] = useState<string>('pending');
+  const [confirmSheet, setConfirmSheet] = useState<{
+    title: string; message?: string; confirmLabel?: string;
+    destructive?: boolean; icon?: string; onConfirm: () => void;
+  } | null>(null);
 
   const { data: records = [], isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ['app-access', filter],
@@ -43,28 +49,35 @@ export function AppAccessRequestsScreen() {
 
   const approveMutation = useMutation({
     mutationFn: (deviceId: string) => appAccessApi.approve(deviceId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['app-access'] }); },
-    onError: (err: any) => Alert.alert('Error', parseApiError(err) || 'Failed to approve'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['app-access'] }); showToast('success', 'Approved', 'Device access approved'); },
+    onError: (err: any) => showToast('error', 'Error', parseApiError(err) || 'Failed to approve'),
   });
 
   const rejectMutation = useMutation({
     mutationFn: (deviceId: string) => appAccessApi.reject(deviceId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['app-access'] }); },
-    onError: (err: any) => Alert.alert('Error', parseApiError(err) || 'Failed to reject'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['app-access'] }); showToast('success', 'Rejected', 'Device access rejected'); },
+    onError: (err: any) => showToast('error', 'Error', parseApiError(err) || 'Failed to reject'),
   });
 
   const handleApprove = (deviceId: string, deviceName: string) => {
-    Alert.alert('Approve Access', `Allow "${deviceName}" to access the app?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Approve', onPress: () => approveMutation.mutate(deviceId) },
-    ]);
+    setConfirmSheet({
+      title: 'Approve Access',
+      message: `Allow "${deviceName}" to access the app?`,
+      confirmLabel: 'Approve',
+      icon: 'checkmark-circle-outline',
+      onConfirm: () => approveMutation.mutate(deviceId),
+    });
   };
 
   const handleReject = (deviceId: string, deviceName: string) => {
-    Alert.alert('Reject Access', `Deny "${deviceName}" from accessing the app?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Reject', style: 'destructive', onPress: () => rejectMutation.mutate(deviceId) },
-    ]);
+    setConfirmSheet({
+      title: 'Reject Access',
+      message: `Deny "${deviceName}" from accessing the app?`,
+      confirmLabel: 'Reject',
+      destructive: true,
+      icon: 'close-circle-outline',
+      onConfirm: () => rejectMutation.mutate(deviceId),
+    });
   };
 
   if (isLoading) return <LoadingScreen />;
@@ -108,6 +121,16 @@ export function AppAccessRequestsScreen() {
         </View>
       ) : null}
 
+      <ConfirmSheet
+        visible={!!confirmSheet}
+        title={confirmSheet?.title ?? ''}
+        message={confirmSheet?.message}
+        confirmLabel={confirmSheet?.confirmLabel}
+        destructive={confirmSheet?.destructive}
+        icon={confirmSheet?.icon}
+        onConfirm={() => { confirmSheet?.onConfirm(); setConfirmSheet(null); }}
+        onClose={() => setConfirmSheet(null)}
+      />
       <FlatList
         data={records}
         keyExtractor={(item: any) => item._id}

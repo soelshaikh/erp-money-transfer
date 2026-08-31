@@ -1,5 +1,5 @@
 import React, { useState, useLayoutEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -19,6 +19,7 @@ import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
 import { fmtAmt } from '../../../utils/fmt';
 import { Ionicons } from '@expo/vector-icons';
+import { RefreshButton } from '../../../shared/components/RefreshButton';
 
 interface TransactionItemProps {
   item: any;
@@ -92,7 +93,6 @@ export function TransactionListScreen({ navigation }: Props) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [showChooser, setShowChooser] = useState(false);
 
   const activeFilterCount = [
     activeFilters.tokenNumber,
@@ -126,15 +126,11 @@ export function TransactionListScreen({ navigation }: Props) {
     navigation.setOptions({
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <RefreshButton onPress={() => refetch()} isFetching={isFetching && !isFetchingNextPage} style={{ marginRight: 2 }} />
           {user?.role === 'branch' && (
-            <>
-              <TouchableOpacity onPress={() => navigation.navigate('CompleteByToken')} style={{ marginRight: theme.spacing.sm + 4 }}>
-                <Ionicons name="barcode-outline" size={26} color={theme.colors.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowChooser(true)} style={{ marginRight: theme.spacing.sm + 4 }}>
-                <Ionicons name="add-circle-outline" size={26} color={theme.colors.primary} />
-              </TouchableOpacity>
-            </>
+            <TouchableOpacity onPress={() => navigation.navigate('CompleteByToken')} style={{ marginRight: theme.spacing.sm + 4 }}>
+              <Ionicons name="barcode-outline" size={26} color={theme.colors.primary} />
+            </TouchableOpacity>
           )}
           <TouchableOpacity
             onPress={() => setShowFilters((prev) => !prev)}
@@ -159,7 +155,7 @@ export function TransactionListScreen({ navigation }: Props) {
         </View>
       ),
     });
-  }, [navigation, theme, showFilters, user, activeFilterCount]);
+  }, [navigation, theme, showFilters, user, activeFilterCount, refetch, isFetching, isFetchingNextPage]);
 
   const applyFilters = () => {
     setActiveFilters({
@@ -189,6 +185,7 @@ export function TransactionListScreen({ navigation }: Props) {
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <View style={{ paddingHorizontal: theme.spacing.md, paddingTop: theme.spacing.sm }}>
         <FilterPanel visible={showFilters} onClear={clearFilters} onApply={applyFilters} theme={theme}>
+          {/* Token number search hidden for now
           <AppInput
             label={t('common.search')}
             value={tokenSearch}
@@ -198,6 +195,7 @@ export function TransactionListScreen({ navigation }: Props) {
             onSubmitEditing={applyFilters}
             autoCorrect={false}
           />
+          */}
           <DateRangeFilter
             fromDate={startDate}
             toDate={endDate}
@@ -264,82 +262,31 @@ export function TransactionListScreen({ navigation }: Props) {
           <RefreshControl refreshing={isFetching && !isFetchingNextPage} onRefresh={refetch} colors={[theme.colors.primary]} />
         }
       />
-      {/* ── New entry chooser (bottom sheet) ──────────── */}
-      <Modal
-        visible={showChooser}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowChooser(false)}
-      >
-        <View style={{ flex: 1 }}>
-          <TouchableOpacity
-            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
-            activeOpacity={1}
-            onPress={() => setShowChooser(false)}
-          />
-          <View style={{
-            backgroundColor: theme.colors.surface,
-            borderTopLeftRadius: 16,
-            borderTopRightRadius: 16,
-            padding: 20,
-            gap: 10,
-          }}>
-            <Text style={{ fontWeight: '700', fontSize: 16, color: theme.colors.text, marginBottom: 4 }}>
-              {t('txn.newEntry')}
-            </Text>
-
-            <TouchableOpacity
-              onPress={() => { setShowChooser(false); navigation.navigate('ShakhaEntry'); }}
-              activeOpacity={0.7}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 14,
-                borderWidth: 1,
-                borderColor: theme.colors.border,
-                borderRadius: theme.borderRadius.md,
-                padding: theme.spacing.md,
-              }}
-            >
-              <Ionicons name="create-outline" size={22} color={theme.colors.primary} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '700', color: theme.colors.text, fontSize: 15 }}>
-                  {t('txn.shakhaEntry')}
-                </Text>
-                <Text style={{ color: theme.colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                  {t('txn.gujaratiForm')}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => { setShowChooser(false); navigation.navigate('CreateTransaction'); }}
-              activeOpacity={0.7}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 14,
-                borderWidth: 1,
-                borderColor: theme.colors.border,
-                borderRadius: theme.borderRadius.md,
-                padding: theme.spacing.md,
-              }}
-            >
-              <Ionicons name="document-text-outline" size={22} color={theme.colors.primary} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '700', color: theme.colors.text, fontSize: 15 }}>
-                  {t('txn.englishForm')}
-                </Text>
-                <Text style={{ color: theme.colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                  {t('txn.englishFormSub')}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* ── FAB: new Shakha entry (branch users only) ── */}
+      {user?.role === 'branch' && (
+        <TouchableOpacity
+          onPress={() => navigation.navigate('ShakhaEntry')}
+          activeOpacity={0.85}
+          style={{
+            position: 'absolute',
+            bottom: tabBarHeight + 16,
+            right: 20,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: theme.colors.primary,
+            justifyContent: 'center',
+            alignItems: 'center',
+            elevation: 6,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.2,
+            shadowRadius: 4,
+          }}
+        >
+          <Ionicons name="add" size={30} color="#fff" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }

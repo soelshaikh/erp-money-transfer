@@ -10,6 +10,13 @@ export interface HQCommissionItem {
   commissionAmount: number;
   hqSharePct: number;
   hqShareAmount: number;
+  // Enterprise tenants only — how much of hqShareAmount is earmarked for the other branch
+  // on the transaction vs Head Office's own cut. Paying the other branch is HO's own process.
+  otherBranchId?: string | null;
+  otherBranchName?: string | null;
+  otherBranchCode?: string | null;
+  otherBranchShareAmount?: number;
+  headOfficeOwnShareAmount?: number;
   status: 'pending' | 'in_settlement' | 'settled';
   settlementId: string | null;
   createdAt: string;

@@ -27,6 +27,11 @@ export const COMMISSION_TYPE = Object.freeze({
   PERCENTAGE: 'percentage',
 } as const);
 
+export const BUSINESS_TYPE = Object.freeze({
+  ENTERPRISE: 'enterprise',
+  AANGADIA: 'aangadia',
+} as const);
+
 export const COMMISSION_SIDE = Object.freeze({
   COLLECTION: 'collection',
   PAYOUT: 'payout',

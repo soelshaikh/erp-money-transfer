@@ -2,6 +2,184 @@
 
 ---
 
+## 2026-09-01 — Session 53
+
+### Partner Transfer Extended — Commission, People, Branch Shortfall
+
+#### Bug Fixes (carried over)
+- **`partner_withdrawal` balance bug**: `buildIncrement` in `MongoBranchLedgerRepository.ts` was missing the case, falling to `default: return {}`. Fixed.
+- **Audit trail time**: `PartnerTransferDetailScreen.tsx` switched from `fmtDate` to `fmtDateTime`.
+
+#### New Events Added
+- `BranchLedger.model.ts`: added `payout_committed_reversed`, `partner_commission`, `partner_commission_reversal`
+- `MongoBranchLedgerRepository.ts`: added `buildIncrement` cases for all three new events
+
+#### PartnerTransfer Model Extended
+New fields: `finalAmount`, `partnerCoversAmount`, `branchCoversAmount`, `commissionSide` (none/collection/payout/payout_extra), `commissionType` (flat/percentage), `commissionValue`, `commissionAmount`, `paymentMethod` (cash/neft/rtgs/imps), `customerTokenNo`, `senderName`, `senderMobile`, `receiverName`, `receiverMobile`
+
+#### Commission Logic (agreed with user)
+- `collection` (Sender Pays): AHM earns commission. Credited at CREATE (pending) or completion (HO-immediate). `finalAmount = amount`.
+- `payout` (Receiver Pays): AHM keeps difference (amount locked, finalAmount less). Credited at COMPLETE. `finalAmount = amount - commission`.
+- `payout_extra` (Receiver Pays Extra): MUM earns commission from Lenar. Credited at COMPLETE. `finalAmount = amount`.
+- No blocking on zero/negative partner balance — branch covers shortfall automatically.
+
+#### Branch Shortfall Logic
+- `partnerCoversAmount = min(amount, max(0, partnerAvail))`; `branchCoversAmount = amount - partnerCovers`
+- CREATE: lock `partnerCovers` in onHolds, `payout_committed` for `branchCovers` in branch ledger
+- COMPLETE: `payout_completed` clears `branchCovers` commitment (balance -= branchCovers)
+- CANCEL/REJECT: `payout_committed_reversed` releases `branchCovers`, reverses sender-pays commission if applicable
+
+#### Files Changed
+Backend: `BranchLedger.model.ts`, `MongoBranchLedgerRepository.ts`, `PartnerTransfer.model.ts`, `CreatePartnerTransfer.ts`, `CompletePartnerTransfer.ts`, `CancelPartnerTransfer.ts`, `RejectPartnerTransfer.ts`, `PartnerTransferController.ts`, `container.ts`
+Mobile: `PartnerTransferScreen.tsx`, `PartnerTransferDetailScreen.tsx`, `externalAccountApi.ts`
+
+---
+
+## 2026-08-31 — Session 52
+
+### Partner Fund Management System — Implemented
+
+#### Bug Fixes
+- **onHold → onHolds per-branch** (`ExternalAccount.model.ts`): Replaced global `onHold: Number` with `onHolds: Map<String, Number>`. Updated `CreateTransaction.ts`, `ApproveTransaction.ts`, `RejectTransaction.ts`, `GetExternalAccounts.ts`, `CreateExternalAccount.ts`, `GetDashboard.ts`.
+- **balanceBefore/After in Approve ledger entries (Bug 3)**: `ApproveTransaction.ts` now uses `balances[collBranchId]` for ledger entry balance snapshots instead of global `balance`.
+- **balanceBefore/After in CompletePayment payout partner entry**: `CompletePayment.ts` now uses `balances[pytBranchId]` for payout partner ledger entry instead of global `balance`.
+- **Explicit withdrawal type**: `AddExternalEntry.ts` now accepts `withdrawal` type (always debit). Branch ledger event: `partner_withdrawal`. AddEntryModal now shows a "Withdraw" button.
+- **ExternalLedger type enum**: Added `transfer_out` and `transfer_in` types.
+
+#### New Feature: Partner Transfer
+- **`PartnerTransfer.model.ts`** — new collection with status: `pending → approved → completed | rejected | cancelled`
+- **Status flow**: Branch creates → pending (onHolds.from += amount) → HO approves → approved → destination branch/HO completes → completed (balances swap, onHolds released). HO-created = immediate completed.
+- **Use cases**: `CreatePartnerTransfer`, `ApprovePartnerTransfer`, `CompletePartnerTransfer`, `CancelPartnerTransfer`, `RejectPartnerTransfer`, `GetPartnerTransfers`
+- **Routes**: `GET/POST /api/v1/partner-transfers`, `GET /:id`, `POST /:id/approve|complete|cancel|reject`
+- **Mobile**: `ExternalAccountDetailScreen` rebuilt with professional ERP layout (branch allocation table, tabs, Transfer button). New `PartnerTransferScreen` (form + live preview + confirmation). New `PartnerTransferDetailScreen` (read-only + role-based actions).
+
+---
+
+## 2026-08-30 — Session 51
+
+### UI Polish + payout_extra CompletePayment flow — implemented
+
+#### Changes
+
+**Hide global working hours from EditSettingsScreen** — entire working-hours section commented out (not deleted). Branch-wise manual management is preferred for now. Comment marks it as re-enableable.
+
+**Fix `@` double-prefix on usernames** — usernames already contain `@` (e.g., `soel@amz`). The UI was prepending an extra `@`. Fixed in 8 files: `SettingsScreen`, `LoginActivityScreen`, `StaffReportScreen`, `DaySignOffsScreen`, `TenantDetailScreen`, `TenantStaffScreen`, `DeviceApprovalsScreen`, `UserListScreen`.
+
+**Hide Timezone row from SettingsScreen** — commented out (not deleted).
+
+**BranchCodeDropdown component** (`mobile/src/shared/components/BranchCodeDropdown.tsx`) — new Modal-based searchable dropdown that shows only branch codes. Replaces chip/tile branch pickers across: `ExternalAccountDetailScreen` (AddEntry modal + assignment picker), `CreateUserScreen` (branch field). Uses same Modal overlay pattern as SearchableSelect — no layout shift.
+
+**Commission override confirm button** — "Revoke Commission Override" text was overflowing the ConfirmSheet button. Changed to use `t('common.revoke')` / `t('common.grant')` (short labels already in translation files).
+
+**Transaction list FAB + navigation** — removed the + header icon chooser modal. Branch users now go directly to ShakhaEntry via a floating action button (bottom-right, 56px circle). Token number filter input hidden in FilterPanel.
+
+**Transaction Timeline section** (`TransactionDetailScreen`) — new collapsible card with:
+- Created / Approved / Completed steps (timestamp + actor name)
+- Commission breakdown box
+- Balance impact section: lazy-loads ledger trail via `GET /transactions/:id/ledger-trail`
+- `completedAt` / `completedBy` added to `Transaction.model.ts` and populated in `completePayment()`
+- `findByTransaction()` added to `MongoBranchLedgerRepository`
+- New controller method `ledgerTrail()` + route `GET /:id/ledger-trail`
+- `branchLedgerRepository` injected into `TransactionController` via `container.ts`
+
+**payout_extra CompletePaymentScreen** — when commission side is `payout_extra` (receiver pays commission on top):
+- Always-visible amber warning shows commission amount due from receiver
+- Toggle: "Collect Extra" (pay full `amount`, collect commission separately) vs "Deduct from Pay" (pay `amount − commissionAmount`)
+- Defaults to "Collect Extra" (primary intended flow for this commission side)
+- `commissionDeducted: true` sent to backend only when mode is "Deduct from Pay"
+- Backend (`CompletePayment.ts`) uses `commissionDeducted` flag to vary ledger descriptions; ledger math is identical either way (committedPayout cleared via `finalAmount` in both cases)
+- `transactionApi.completePayment` accepts optional 3rd param `commissionDeducted`
+- `schemas.ts` accepts `commissionDeducted: Joi.boolean().optional()`
+
+---
+
+## 2026-08-25 — Session 50
+
+### Feature: Partner Selection for Lenar/Mokalnar (Phase B) — implemented
+
+Completes the plan in `docs/2026-08-25-enterprise-commission-and-partner-flow-plan.md` (Phase A was Session 49). Scope: `ShakhaEntryScreen.tsx` only, per plan — `CreateTransactionScreen.tsx` untouched.
+
+**Permission change (needed to unblock this):** `ExternalAccountController.list` previously hard-locked branch-role users to their own branch's partner list, with no override possible. Since Lenar's partner belongs to the *payout* branch (someone else's), this had to relax: branch users now default to their own branch when no `branchId` is passed (unchanged for existing callers), but can explicitly request another branch's list. User confirmed full visibility (name + balance) is fine, no need to hide balance for other branches.
+
+#### Backend
+- `Transaction.model.ts` — new `payoutExternalAccountId` (receiver-side partner, separate from the existing sender-side `externalAccountId`).
+- `schemas.ts` — `payoutExternalAccountId` added to `createTransaction`.
+- `ExternalAccountController.ts` — branch-role `branchId` query override, as above.
+- `CreateTransaction.ts` — validates `payoutExternalAccountId` belongs to the payout branch (mirrors the existing sender-side validation); stores it on the transaction. No balance movement at creation — deferred to completion, matching when the payout branch itself is credited/debited.
+- `CompletePayment.ts` — at payout completion, if a payout partner is set: branch still pays `finalAmount` out in full (unchanged), and the partner's balance separately moves toward "OWES US" by the same amount (new `ExternalLedger` entry, `type: 'due'` — reusing the exact existing due/debit semantics, no schema change needed). No cap/onHold, since this is new debt, not consumption of existing credit (asymmetric from the sender side by design, per user confirmation).
+- **Branch-balance netting removed** (`CreateTransaction.ts`): `branchPortion` changed from `amount − partnerCoveredAmount` to plain `amount` — the collection branch's own ledger now always shows the full transaction amount, regardless of partner coverage. Partner balance still moves separately (unchanged) — both are now fully visible, nothing hidden, per user's explicit request and confirmed design choice.
+- **Bug caught and fixed during this change:** `RejectTransaction.ts`'s reversal was computing `branchPortion = transaction.amount − partnerCovered`, which would have *under-reversed* by the partner-covered amount on any rejected partner-covered transaction (since the original credit was no longer netted). Fixed to reverse the full `transaction.amount`, matching what's actually credited now.
+- Verified `ApproveTransaction.ts`'s partner-ledger logic (dueAmount, onHold release) is untouched and correct — it only ever operated on the partner's own balance, never the branch's, so it wasn't affected by the netting change.
+
+#### Mobile (`ShakhaEntryScreen.tsx`)
+- New `ModeToggle` ("Type" / "Partner") and `PartnerPickerButton` helper components.
+- Mokalnar (sender) row: mode toggle added; "Partner" mode shows the existing partner picker (now scoped/labeled to Mokalnar) instead of name/mobile text inputs. The old standalone "Partner (Optional)" section (previously decoupled from Mokalnar) was removed and folded into this toggle.
+- Lenar (receiver) row: same toggle, but "Partner" mode is disabled until a payout branch is selected (new partners are fetched for that specific branch via the now-unlocked cross-branch list endpoint). New `showLenarPartnerModal` mirrors the existing partner-picker modal.
+- Selecting a partner for either side now feeds the `L:`/`M:` remarks tags as `CODE Name` (existing `extractLenar`/`extractMokalnar` regex on the "today's entries" table already handles this — no change needed there, it just displays the code).
+- `payoutExternalAccountId` resets whenever the payout branch changes (stale partner from a different branch can't linger).
+
+#### Not done / explicitly out of scope
+- `CreateTransactionScreen.tsx` (the non-Gujarati entry screen) was not touched — plan scoped Phase B to `ShakhaEntryScreen.tsx` only.
+- No UI change to show branch-balance change history explaining *why* a partner-covered transaction's amount is now fully visible in the branch ledger — existing ledger/statement screens already show the `collection` event with its full amount and description text (now includes `[Sender Partner: ...]` / `[Receiver Partner: ...]` tags), so no new event type was needed.
+
+---
+
+## 2026-08-25 — Session 49
+
+### Feature: Enterprise Commission Split (Phase A) — implemented
+
+Full plan in `docs/2026-08-25-enterprise-commission-and-partner-flow-plan.md`. This session implemented Phase A only; Phase B (partner selection for Lenar/Mokalnar) is not started.
+
+**Business rule (from user, confirmed with concrete example):** Enterprise tenants configure `branchPct` (applies once to whichever branch earns the commission — collection or payout side) and `headOfficePct`, where `2×branchPct + headOfficePct = 100`. The earning branch keeps its own `branchPct`% immediately (unchanged timing/amount from today). It settles the *combined* remainder (`100 − branchPct`%, i.e. the other branch's share + HO's own share) with Head Office in a single settlement — **not** with the other branch directly. What HO does with the other branch's earmarked portion is HO's own manual process, outside this system.
+
+#### Backend
+- `Tenant.model.ts` — `settings.commissionSplit: { branchPct, headOfficePct }`, null until configured.
+- `Transaction.model.ts` — `commissionSplit` snapshot (`earningBranchId`, `ownShareAmount`, `otherBranchId`, `otherBranchShareAmount`, `headOfficeOwnShareAmount`) saved at the same moment the earning branch is credited, so reports stay accurate even if settings change later.
+- `HQCommissionItem.model.ts` — added `otherBranchId/Name/Code`, `otherBranchShareAmount`, `headOfficeOwnShareAmount` (informational breakdown fields; `hqShareAmount` itself is unchanged in meaning — it's still the single amount the branch settles with HO, now just a bigger number for enterprise tenants: `100 − branchPct`% instead of `masterCommissionPct`%).
+- `domain/value-objects/Commission.ts` — new `Commission.splitEnterprise(commissionAmount, branchPct, headOfficePct)`. All amounts derived by subtraction (never independently rounded) so parts always reconcile exactly to the total, even after paisa rounding.
+- `CreateTransaction.ts` — enterprise tenants **blocked** from creating any transaction until `commissionSplit` is configured (financial safety, no silent fallback). For `commissionSide=collection`, the split + `HQCommissionItem` are created immediately (same moment the collection branch is credited, as today).
+- `CompletePayment.ts` — for `commissionSide=payout/payout_extra` on enterprise tenants, same treatment at completion time. **Bypasses** `masterCommissionPct` and the `creditCommissionToSendingBranch` flag entirely for enterprise tenants — those remain exactly as-is for `aangadia` tenants (verified both code paths don't run on the enterprise branches).
+- Settlement mechanics reused **completely unchanged** — `CreateHQCommissionSettlement.ts` / `CompleteHQCommissionSettlement.ts` didn't need any changes; they already sum `hqShareAmount` generically and debit the earning branch / credit HO's branch if one exists.
+- `schemas.ts` — new `updateTenantCommissionSplit` (super admin) and `commissionSplit` added to `updateSettings` (head office self-service), both enforcing `2×branchPct + headOfficePct === 100` via a shared Joi `.custom()` validator.
+- `TenantController.ts` / `tenant.routes.ts` — new `PATCH /tenants/:id/commission-split`.
+- `GetSettings.ts` — now returns `businessType` (was missing — needed so mobile can conditionally show the split editor).
+- `MongoTransactionRepository.ts` (`getCommissionDetail`) — added `commissionSplit` to the select + populate, so the commission detail report carries the breakdown per transaction.
+
+#### Mobile
+- `EditSettingsScreen.tsx` (head office) and `TenantDetailScreen.tsx` (super admin) — new "Commission Split" editor (Branch % / HO %), shown only when `businessType === 'enterprise'`, with live 100%-sum validation client-side.
+- `CommissionDetailScreen.tsx` — shows the 3-way breakdown per transaction (own / other branch / HO) when `commissionSplit` is present on a transaction.
+- `HQCommissionItemsScreen.tsx` / `HQCommissionSettlementDetailScreen.tsx` — show "owed to [other branch]" and "HO's own share" breakdown lines alongside the total `hqShareAmount`.
+- `MyStatementScreen.tsx` / `BranchLedgerScreen.tsx` — filled in missing event labels (`commission_earned/payable/receivable/settlement_out/in`, `hq_commission_out/in`) found during research to be silently falling back to raw event names. Branches will hit `hq_commission_out` more now that enterprise settlements route entirely through it.
+
+#### Explicitly not done this session
+- `ReportsScreen.tsx` (aggregate daily/monthly report) and `ExportReport.ts` (Excel export) were **not** extended with the 3-way breakdown — that's a multi-branch aggregation design question that wasn't specifically asked for (the "detail-wise" requirement was about per-transaction display, which `CommissionDetailScreen.tsx` already covers). Flagged for the user to request explicitly if wanted.
+- Phase B (partner selection for Lenar/Mokalnar in `ShakhaEntryScreen.tsx`, branch-balance netting change) — not started.
+- No migration script for existing tenants — `businessType` defaults only apply to newly-created Tenant documents; existing tenants read back as `undefined` (not `'enterprise'`), which correctly falls through to unchanged aangadia/legacy behavior until a tenant is explicitly switched via the "Change Business Type" button (added Session 48).
+
+---
+
+## 2026-08-25 — Session 48
+
+### Feature: Company Business Type (Enterprise / Aangadia)
+
+**Requirement:** When super admin registers a new company, capture how it operates — modern "enterprise" digital flow vs traditional "aangadia" style — so tenant-level config can eventually branch on it. User confirmed: (1) initially this only drives a commission-type default, no other behavior differences yet; (2) the field should be editable later by super admin, not locked at creation.
+
+#### Backend
+- `Tenant.model.ts` — new top-level `businessType: 'enterprise' | 'aangadia'` (required, default `'enterprise'`)
+- `config/constants.ts` — new `BUSINESS_TYPE` enum constant
+- `validators/schemas.ts` — `businessType` required in `createTenant`; new `updateTenantBusinessType` schema
+- `CreateTenant.ts` — accepts `businessType`; defaults `settings.commission.type` from it (`aangadia` → `flat`, `enterprise` → `percentage`) unless commission is explicitly provided — this default mapping was a judgment call, not a spec'd requirement, and can be revisited
+- `TenantController.ts` / `tenant.routes.ts` — new `PATCH /api/v1/tenants/:id/business-type` (super admin only), same dot-path `$set` pattern as `updateCommission`
+
+#### Mobile
+- `RegisterCompanyScreen.tsx` — required Enterprise/Aangadia segmented toggle in the registration form (default Enterprise)
+- `TenantDetailScreen.tsx` — displays business type; "Change Business Type" button (Alert.alert picker, same pattern as "Change Status")
+- `tenantApi.ts` — new `updateBusinessType(id, businessType)` call
+
+**Not done:** No other use-case (Login, CreateTransaction, CompletePayment) branches on `businessType` yet. Only the commission default is wired. Deeper behavior differences (OTP requirements, etc.) were explicitly deferred — revisit once more is known about what "aangadia" mode should actually change.
+
+---
+
 ## 2026-08-23 — Session 47
 
 ### Feature: Sign-Off / Working Hours
