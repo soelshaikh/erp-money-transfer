@@ -18,6 +18,7 @@ export default class MongoTransactionRepository extends ITransactionRepository {
       .populate('payoutBranchId', 'name code')
       .populate('createdBy', 'name username')
       .populate('approvedBy', 'name username')
+      .populate('completedBy', 'name username')
       .populate('externalAccountId', 'name code')
       .lean();
     return doc || null;
@@ -63,10 +64,10 @@ export default class MongoTransactionRepository extends ITransactionRepository {
     return doc || null;
   }
 
-  async completePayment(tenantId: any, id: any, extras: any = {}) {
+  async completePayment(tenantId: any, id: any, extras: any = {}, completedBy?: any) {
     const doc = await TransactionModel.findOneAndUpdate(
       { _id: id, tenantId, paymentStatus: PAYMENT_STATUS.PENDING },
-      { $set: { paymentStatus: PAYMENT_STATUS.COMPLETED, ...extras } },
+      { $set: { paymentStatus: PAYMENT_STATUS.COMPLETED, completedAt: new Date(), ...(completedBy && { completedBy }), ...extras } },
       { new: true }
     ).lean();
     return doc || null; // null = already completed by a concurrent request
@@ -185,25 +186,30 @@ export default class MongoTransactionRepository extends ITransactionRepository {
   }
 
   async getCommissionSummary(tenantId: any, filters: any = {}) {
-    const { collectionBranchId, fromDate, toDate } = filters;
+    const { branchId, fromDate, toDate } = filters;
     const match: any = { tenantId: new mongoose.Types.ObjectId(tenantId) };
-    if (collectionBranchId) match.collectionBranchId = new mongoose.Types.ObjectId(collectionBranchId);
+    if (branchId) {
+      const bId = new mongoose.Types.ObjectId(branchId);
+      // Pre-filter: include any transaction where this branch is collection OR payout
+      // The earningBranchId stage below further narrows to transactions they actually earned
+      match.$or = [{ collectionBranchId: bId }, { payoutBranchId: bId }];
+    }
     if (fromDate || toDate) {
       match.createdAt = {};
       if (fromDate) match.createdAt.$gte = parseISTFilterDate(fromDate, false);
       if (toDate)   match.createdAt.$lte = parseISTFilterDate(toDate, true);
     }
 
+    // earningBranchId: use commissionSplit.earningBranchId when saved (set at payout completion).
+    // For pending/approved payout-side txns, default to collectionBranchId (deduct is the default mode).
+    const earningBranchExpr: any = { $ifNull: ['$commissionSplit.earningBranchId', '$collectionBranchId'] };
+    const earningBranchFilter = branchId ? [{ $match: { earningBranchId: new mongoose.Types.ObjectId(branchId) } }] : [];
+
     const [rows, grand] = await Promise.all([
       TransactionModel.aggregate([
         { $match: match },
-        {
-          $addFields: {
-            earningBranchId: {
-              $cond: [{ $eq: ['$commissionSide', 'payout'] }, '$payoutBranchId', '$collectionBranchId'],
-            },
-          },
-        },
+        { $addFields: { earningBranchId: earningBranchExpr } },
+        ...earningBranchFilter,
         { $group: { _id: '$earningBranchId', totalCommission: { $sum: '$commissionAmount' }, totalAmount: { $sum: '$amount' }, txnCount: { $sum: 1 } } },
         { $lookup: { from: 'branches', localField: '_id', foreignField: '_id', as: 'branch' } },
         { $unwind: { path: '$branch', preserveNullAndEmptyArrays: true } },
@@ -212,6 +218,8 @@ export default class MongoTransactionRepository extends ITransactionRepository {
       ]),
       TransactionModel.aggregate([
         { $match: match },
+        { $addFields: { earningBranchId: earningBranchExpr } },
+        ...earningBranchFilter,
         { $group: { _id: null, totalCommission: { $sum: '$commissionAmount' }, totalAmount: { $sum: '$amount' }, txnCount: { $sum: 1 } } },
       ]),
     ]);
@@ -236,9 +244,18 @@ export default class MongoTransactionRepository extends ITransactionRepository {
   }
 
   async getCommissionDetail(tenantId: any, filters: any = {}) {
-    const { collectionBranchId, fromDate, toDate, page = 1, limit = 30 } = filters;
+    const { branchId, fromDate, toDate, page = 1, limit = 30 } = filters;
     const query: any = { tenantId: new mongoose.Types.ObjectId(tenantId) };
-    if (collectionBranchId) query.collectionBranchId = new mongoose.Types.ObjectId(collectionBranchId);
+    if (branchId) {
+      const bId = new mongoose.Types.ObjectId(branchId);
+      // Mirror the earningBranchId logic from getCommissionSummary:
+      // earningBranchId = commissionSplit.earningBranchId ?? collectionBranchId
+      // So a branch earns when explicitly named OR when they are collection branch and no earningBranchId is set.
+      query.$or = [
+        { 'commissionSplit.earningBranchId': bId },
+        { collectionBranchId: bId, 'commissionSplit.earningBranchId': null },
+      ];
+    }
     if (fromDate || toDate) {
       query.createdAt = {};
       if (fromDate) query.createdAt.$gte = parseISTFilterDate(fromDate, false);

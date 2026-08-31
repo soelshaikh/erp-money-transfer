@@ -14,18 +14,28 @@ export default class AddExternalEntry {
     const { tenantId, accountId, type, direction, amount, description, entryDate, createdBy, createdByName, branchId, transactionId } = params;
 
     if (!amount || amount <= 0) throw new ValidationError('Amount must be greater than zero');
-    if (!['deposit', 'due', 'adjustment'].includes(type)) throw new ValidationError('Invalid entry type');
+    if (!['deposit', 'due', 'adjustment', 'withdrawal'].includes(type)) throw new ValidationError('Invalid entry type');
+    if (type === 'withdrawal' && direction !== 'debit') throw new ValidationError('Withdrawal must be a debit');
     if (!['credit', 'debit'].includes(direction)) throw new ValidationError('Invalid direction');
 
     const account = await ExternalAccountModel.findOne({ _id: accountId, tenantId });
     if (!account) throw new NotFoundError('Partner account not found');
     if (account.status !== 'active') throw new ValidationError('Cannot add entry to an inactive partner account');
 
-    const balanceBefore = account.balance;
-    const balanceAfter = direction === 'credit' ? balanceBefore + amount : balanceBefore - amount;
+    const totalBalanceBefore = account.balance;
+    const increment = direction === 'credit' ? amount : -amount;
+    const totalBalanceAfter = totalBalanceBefore + increment;
+
+    const effectiveBranchId = branchId || null;
+    // Per-branch balance before (for ledger display)
+    const branchBalanceBefore = effectiveBranchId
+      ? ((account.balances as any)?.get?.(effectiveBranchId.toString()) ?? (account.balances as any)?.[effectiveBranchId.toString()] ?? 0)
+      : totalBalanceBefore;
 
     const date = entryDate || toISTDate(new Date());
-    const effectiveBranchId = branchId || null;
+
+    const balanceUpdate: any = { $inc: { balance: increment } };
+    if (effectiveBranchId) balanceUpdate.$inc[`balances.${effectiveBranchId}`] = increment;
 
     const [entry] = await Promise.all([
       ExternalLedgerModel.create({
@@ -36,14 +46,14 @@ export default class AddExternalEntry {
         type,
         direction,
         amount,
-        balanceBefore,
-        balanceAfter,
+        balanceBefore: branchBalanceBefore,
+        balanceAfter: branchBalanceBefore + increment,
         description: description?.trim() || null,
         entryDate: date,
         createdBy,
         createdByName: createdByName || null,
       }),
-      ExternalAccountModel.updateOne({ _id: accountId, tenantId }, { $set: { balance: balanceAfter } }),
+      ExternalAccountModel.updateOne({ _id: accountId, tenantId }, balanceUpdate),
     ]);
 
     // Sync branch balance + create branch ledger trail for manual entries with a branch
@@ -51,7 +61,7 @@ export default class AddExternalEntry {
     let branchSkipReason = '';
 
     if (!transactionId && effectiveBranchId && this.branchLedgerRepository) {
-      const branchEvent = direction === 'credit' ? 'partner_deposit' : 'partner_due';
+      const branchEvent = direction === 'credit' ? 'partner_deposit' : (type === 'withdrawal' ? 'partner_withdrawal' : 'partner_due');
       console.log(`[AddExternalEntry] updating branch ${effectiveBranchId} with ${branchEvent} amount=${amount}`);
       try {
         await this.branchLedgerRepository.addEntry(tenantId, effectiveBranchId, {
@@ -74,6 +84,6 @@ export default class AddExternalEntry {
       console.log(`[AddExternalEntry] skipping branch update — ${branchSkipReason}`);
     }
 
-    return { entry, balanceAfter, branchUpdated, branchSkipReason };
+    return { entry, balanceAfter: totalBalanceAfter, branchUpdated, branchSkipReason };
   }
 }

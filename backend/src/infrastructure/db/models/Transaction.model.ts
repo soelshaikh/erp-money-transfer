@@ -47,6 +47,8 @@ const transactionSchema = new mongoose.Schema({
   // Balance moves at payout completion, not at creation — see CompletePayment.ts.
   payoutExternalAccountId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExternalAccount', default: null },
   commissionSplit: { type: commissionSplitSchema, default: null },
+  completedAt: { type: Date, default: null },
+  completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 }, {
   timestamps: true,
   collection: 'transactions',

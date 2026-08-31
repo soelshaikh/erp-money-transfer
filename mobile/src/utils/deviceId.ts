@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import { storage } from './storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
@@ -13,10 +13,10 @@ function generateUUID(): string {
 
 export async function getOrCreateDeviceId(): Promise<string> {
   try {
-    const stored = await SecureStore.getItemAsync(DEVICE_ID_KEY);
+    const stored = await storage.getItemAsync(DEVICE_ID_KEY);
     if (stored) return stored;
     const id = generateUUID();
-    await SecureStore.setItemAsync(DEVICE_ID_KEY, id);
+    await storage.setItemAsync(DEVICE_ID_KEY, id);
     return id;
   } catch {
     return generateUUID();

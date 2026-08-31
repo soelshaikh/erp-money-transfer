@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Alert } from 'react-native';
 import { io, Socket } from 'socket.io-client';
-import * as SecureStore from 'expo-secure-store';
+import { storage } from '../../utils/storage';
 import { useAuthStore } from '../../store/authStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { queryClient } from '../../api/queryClient';
@@ -19,8 +19,8 @@ export function useSocket(): void {
 
     const connect = async () => {
       const [token, deviceId] = await Promise.all([
-        SecureStore.getItemAsync('accessToken'),
-        SecureStore.getItemAsync(DEVICE_ID_KEY),
+        storage.getItemAsync('accessToken'),
+        storage.getItemAsync(DEVICE_ID_KEY),
       ]);
 
       socketRef.current = io(SOCKET_URL, {

@@ -1,5 +1,6 @@
-import React from 'react';
-import { View, Text, ScrollView, Alert, RefreshControl } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, RefreshControl } from 'react-native';
+import { ConfirmSheet } from '../../../shared/components/ConfirmSheet';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../../theme/TenantThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +10,7 @@ import { AppCard } from '../../../shared/components/AppCard';
 import { AppButton } from '../../../shared/components/AppButton';
 import { LoadingScreen } from '../../../shared/components/LoadingScreen';
 import { parseApiError } from '../../../utils/apiError';
+import { showToast } from '../../../utils/toast';
 import { commissionSettlementApi } from '../api/commissionSettlementApi';
 
 interface Props {
@@ -43,6 +45,10 @@ export function CommissionSettlementDetailScreen({ route, navigation }: Props) {
   const { settlementId } = route.params;
   const theme = useTheme();
   const qc = useQueryClient();
+  const [confirmSheet, setConfirmSheet] = useState<{
+    title: string; message?: string; confirmLabel?: string;
+    icon?: string; onConfirm: () => void;
+  } | null>(null);
 
   const { data: settlement, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['commissionSettlement', settlementId],
@@ -57,22 +63,19 @@ export function CommissionSettlementDetailScreen({ route, navigation }: Props) {
       qc.invalidateQueries({ queryKey: ['commissionPayables'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['branchLedger'] });
+      showToast('success', 'Completed', 'Settlement marked as complete');
     },
-    onError: (e: any) => Alert.alert('Error', parseApiError(e) ?? 'Failed to complete settlement'),
+    onError: (e: any) => showToast('error', 'Error', parseApiError(e) ?? 'Failed to complete settlement'),
   });
 
   const handleComplete = () => {
-    Alert.alert(
-      'Complete Settlement',
-      `Confirm that ${fmtAmt((settlement as any)?.totalAmount)} has been physically transferred from ${(settlement as any)?.fromBranchName} to ${(settlement as any)?.toBranchName}?\n\nThis will update both branch balances and cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm & Complete',
-          onPress: () => completeMutation.mutate(),
-        },
-      ],
-    );
+    setConfirmSheet({
+      title: 'Complete Settlement',
+      message: `Confirm that ${fmtAmt((settlement as any)?.totalAmount)} has been physically transferred from ${(settlement as any)?.fromBranchName} to ${(settlement as any)?.toBranchName}?\n\nThis will update both branch balances and cannot be undone.`,
+      confirmLabel: 'Confirm & Complete',
+      icon: 'checkmark-circle-outline',
+      onConfirm: () => completeMutation.mutate(),
+    });
   };
 
   if (isLoading) return <LoadingScreen message="Loading..." />;
@@ -83,6 +86,7 @@ export function CommissionSettlementDetailScreen({ route, navigation }: Props) {
   const statusColor = isPending ? theme.colors.warning : theme.colors.success;
 
   return (
+    <>
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.colors.background }}
       contentContainerStyle={{ padding: theme.spacing.md, paddingBottom: 40 }}
@@ -204,5 +208,16 @@ export function CommissionSettlementDetailScreen({ route, navigation }: Props) {
         </AppCard>
       )}
     </ScrollView>
+    <ConfirmSheet
+      visible={!!confirmSheet}
+      title={confirmSheet?.title ?? ''}
+      message={confirmSheet?.message}
+      confirmLabel={confirmSheet?.confirmLabel}
+      icon={confirmSheet?.icon}
+      loading={completeMutation.isPending}
+      onConfirm={() => { confirmSheet?.onConfirm(); setConfirmSheet(null); }}
+      onClose={() => setConfirmSheet(null)}
+    />
+    </>
   );
 }

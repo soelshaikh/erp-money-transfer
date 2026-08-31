@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, FlatList, RefreshControl, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { View, Text, FlatList, RefreshControl, TouchableOpacity, TextInput } from 'react-native';
+import { showToast } from '../../../utils/toast';
+import { ConfirmSheet } from '../../../shared/components/ConfirmSheet';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../../theme/TenantThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +28,10 @@ export function UserDevicesScreen({ route }: Props) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newDeviceId, setNewDeviceId] = useState('');
   const [newDeviceName, setNewDeviceName] = useState('');
+  const [confirmSheet, setConfirmSheet] = useState<{
+    title: string; message?: string; confirmLabel?: string;
+    destructive?: boolean; icon?: string; onConfirm: () => void;
+  } | null>(null);
 
   const queryKey = ['user-devices', userId, crossTenantId ?? null];
 
@@ -40,8 +46,8 @@ export function UserDevicesScreen({ route }: Props) {
     mutationFn: (deviceId: string) => crossTenantId
       ? tenantApi.removeUserDevice(crossTenantId, userId, deviceId)
       : userApi.removeDevice(userId, deviceId),
-    onSuccess: () => qc.invalidateQueries({ queryKey }),
-    onError: (err: any) => Alert.alert('Error', parseApiError(err) ?? 'Failed to remove device'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey }); showToast('success', 'Removed', 'Device removed'); },
+    onError: (err: any) => showToast('error', 'Error', parseApiError(err) ?? 'Failed to remove device'),
   });
 
   const addMutation = useMutation({
@@ -56,24 +62,25 @@ export function UserDevicesScreen({ route }: Props) {
       setNewDeviceId('');
       setNewDeviceName('');
       setShowAddForm(false);
+      showToast('success', 'Added', 'Device added successfully');
     },
-    onError: (err: any) => Alert.alert('Error', parseApiError(err) ?? 'Failed to add device'),
+    onError: (err: any) => showToast('error', 'Error', parseApiError(err) ?? 'Failed to add device'),
   });
 
   const handleRemove = (device: any) => {
-    Alert.alert(
-      t('user.removeDevice'),
-      `Remove "${device.deviceName}"?\n\n${t('user.removeDeviceMsg')}`,
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('user.removeDevice'), style: 'destructive', onPress: () => removeMutation.mutate(device.deviceId) },
-      ]
-    );
+    setConfirmSheet({
+      title: t('user.removeDevice'),
+      message: `Remove "${device.deviceName}"?\n\n${t('user.removeDeviceMsg')}`,
+      confirmLabel: t('user.removeDevice'),
+      destructive: true,
+      icon: 'trash-outline',
+      onConfirm: () => removeMutation.mutate(device.deviceId),
+    });
   };
 
   const handleAdd = () => {
     if (!newDeviceId.trim()) {
-      Alert.alert('Error', t('user.deviceIdRequired'));
+      showToast('error', 'Error', t('user.deviceIdRequired'));
       return;
     }
     addMutation.mutate();
@@ -84,6 +91,7 @@ export function UserDevicesScreen({ route }: Props) {
   const devices: any[] = data || [];
 
   return (
+    <>
     <FlatList
       data={devices}
       keyExtractor={(item: any) => item.deviceId}
@@ -205,5 +213,16 @@ export function UserDevicesScreen({ route }: Props) {
         />
       }
     />
+    <ConfirmSheet
+      visible={!!confirmSheet}
+      title={confirmSheet?.title ?? ''}
+      message={confirmSheet?.message}
+      confirmLabel={confirmSheet?.confirmLabel}
+      destructive={confirmSheet?.destructive}
+      icon={confirmSheet?.icon}
+      onConfirm={() => { confirmSheet?.onConfirm(); setConfirmSheet(null); }}
+      onClose={() => setConfirmSheet(null)}
+    />
+    </>
   );
 }

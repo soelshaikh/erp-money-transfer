@@ -56,6 +56,8 @@ import { CreateHeadOfficeScreen } from '../features/tenant/screens/CreateHeadOff
 import { AppAccessRequestsScreen } from '../features/tenant/screens/AppAccessRequestsScreen';
 import { ExternalAccountListScreen } from '../features/branch/screens/ExternalAccountListScreen';
 import { ExternalAccountDetailScreen } from '../features/branch/screens/ExternalAccountDetailScreen';
+import { PartnerTransferScreen } from '../features/branch/screens/PartnerTransferScreen';
+import { PartnerTransferDetailScreen } from '../features/branch/screens/PartnerTransferDetailScreen';
 
 // Screens — HQ commission
 import { HQCommissionItemsScreen } from '../features/hqCommission/screens/HQCommissionItemsScreen';
@@ -377,7 +379,7 @@ function BranchStack() {
       <Stack.Screen
         name="EditBranchCommission"
         component={EditBranchCommissionScreen}
-        options={({ route }: any) => ({ title: `${route.params?.branchName || t('nav.branches')} — ${t('nav.commission')}` })}
+        options={({ route }: any) => ({ title: `${route.params?.branchName || t('nav.branches')} — Settings` })}
       />
       <Stack.Screen
         name="CommissionPayables"
@@ -415,6 +417,7 @@ function BranchStack() {
 
 function PartnersStack() {
   const theme = useTheme();
+  const { t } = useTranslation();
   const s = { headerStyle: { backgroundColor: theme.colors.surface }, headerTintColor: theme.colors.primary };
   return (
     <Stack.Navigator screenOptions={s}>
@@ -423,6 +426,17 @@ function PartnersStack() {
         name="ExternalAccountDetail"
         component={ExternalAccountDetailScreen}
         options={({ route }: any) => ({ title: route.params?.accountName || 'Partner Detail' })}
+      />
+      <Stack.Screen name="TransactionDetail" component={TransactionDetailScreen} options={{ title: t('nav.transactionDetails') }} />
+      <Stack.Screen
+        name="PartnerTransfer"
+        component={PartnerTransferScreen}
+        options={({ route }: any) => ({ title: `Transfer — ${route.params?.accountName || 'Partner'}` })}
+      />
+      <Stack.Screen
+        name="PartnerTransferDetail"
+        component={PartnerTransferDetailScreen}
+        options={{ title: 'Transfer Detail' }}
       />
     </Stack.Navigator>
   );

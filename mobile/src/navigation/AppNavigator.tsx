@@ -11,6 +11,9 @@ import { LoadingScreen } from '../shared/components/LoadingScreen';
 import { useSocket } from '../shared/hooks/useSocket';
 import '../i18n';
 import { getOrCreateDeviceId } from '../utils/deviceId';
+import { storage } from '../utils/storage';
+import { authApi } from '../features/auth/api/authApi';
+import axios from 'axios';
 
 function SocketManager() {
   useSocket();
@@ -35,10 +38,37 @@ export function AppNavigator() {
 
   useEffect(() => {
     loadConfig();
-    finishLoading();
     loadLang();
     loadSignOffState();
     getOrCreateDeviceId().catch(() => {});
+
+    // Restore session from stored token (critical for web page refreshes)
+    const tryRestoreSession = async () => {
+      try {
+        const token = await storage.getItemAsync('accessToken');
+        if (!token) { finishLoading(); return; }
+        // Token exists — call /me to get fresh user + tenant data
+        const { user, tenant } = await authApi.getMe();
+        await useAuthStore.getState().restoreSession(user, tenant);
+      } catch (err: any) {
+        // Access token expired — try refresh
+        try {
+          const refreshToken = await storage.getItemAsync('refreshToken');
+          if (!refreshToken) throw new Error('no refresh token');
+          const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+          const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
+          await storage.setItemAsync('accessToken', data.data.accessToken);
+          const { user, tenant } = await authApi.getMe();
+          await useAuthStore.getState().restoreSession(user, tenant);
+        } catch {
+          // Both failed — clear tokens and show login
+          await storage.deleteItemAsync('accessToken');
+          await storage.deleteItemAsync('refreshToken');
+          finishLoading();
+        }
+      }
+    };
+    tryRestoreSession();
   }, []);
 
   if (authLoading || configLoading) {

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, Alert, StyleSheet,
+  View, Text, FlatList, TouchableOpacity, StyleSheet,
 } from 'react-native';
+import { showToast } from '../../../utils/toast';
+import { ConfirmSheet } from '../../../shared/components/ConfirmSheet';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +22,10 @@ export function DaySignOffsScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const qc = useQueryClient();
   const [enablingId, setEnablingId] = useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    title: string; message?: string; confirmLabel?: string;
+    destructive?: boolean; icon?: string; onConfirm: () => void;
+  } | null>(null);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['daySignOffs'],
@@ -35,26 +41,21 @@ export function DaySignOffsScreen() {
     },
     onError: () => {
       setEnablingId(null);
-      Alert.alert(t('common.error'), t('signOff.enableFailed'));
+      showToast('error', t('common.error'), t('signOff.enableFailed'));
     },
   });
 
   const handleEnable = (item: any) => {
     if (item.reLoginEnabled) return;
-    Alert.alert(
-      t('signOff.enableTitle'),
-      t('signOff.enableConfirm', { name: item.userId?.name || '—' }),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('signOff.enableBtn'),
-          onPress: () => {
-            setEnablingId(item._id);
-            enableMutation.mutate(item._id);
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      title: t('signOff.enableTitle'),
+      message: t('signOff.enableConfirm', { name: item.userId?.name || '—' }),
+      confirmLabel: t('signOff.enableBtn'),
+      onConfirm: () => {
+        setEnablingId(item._id);
+        enableMutation.mutate(item._id);
+      },
+    });
   };
 
   if (isLoading) return <LoadingScreen />;
@@ -87,7 +88,7 @@ export function DaySignOffsScreen() {
               {user.name || '—'}
             </Text>
             <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}>
-              @{user.username || '—'}
+              {user.username || '—'}
               {branch.code ? `  ·  ${branch.code}` : ''}
             </Text>
             <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
@@ -134,6 +135,7 @@ export function DaySignOffsScreen() {
   };
 
   return (
+    <>
     <FlatList
       data={records}
       keyExtractor={(item) => item._id}
@@ -165,5 +167,16 @@ export function DaySignOffsScreen() {
       initialNumToRender={10}
       keyboardShouldPersistTaps="handled"
     />
+    <ConfirmSheet
+      visible={!!confirmSheet}
+      title={confirmSheet?.title ?? ''}
+      message={confirmSheet?.message}
+      confirmLabel={confirmSheet?.confirmLabel}
+      destructive={confirmSheet?.destructive}
+      icon={confirmSheet?.icon}
+      onConfirm={() => { confirmSheet?.onConfirm(); setConfirmSheet(null); }}
+      onClose={() => setConfirmSheet(null)}
+    />
+    </>
   );
 }

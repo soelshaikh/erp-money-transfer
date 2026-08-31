@@ -1,9 +1,11 @@
 import React, { useState, useLayoutEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { ConfirmSheet } from '../../../shared/components/ConfirmSheet';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../../theme/TenantThemeProvider';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { RefreshButton } from '../../../shared/components/RefreshButton';
 import { withAlpha } from '../../../utils/colors';
 import { fmtAmt, fmtDate } from '../../../utils/fmt';
 import { AppCard } from '../../../shared/components/AppCard';
@@ -12,6 +14,7 @@ import { LoadingScreen } from '../../../shared/components/LoadingScreen';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { FilterChipGroup } from '../../../shared/components/FilterChipGroup';
 import { parseApiError } from '../../../utils/apiError';
+import { showToast } from '../../../utils/toast';
 import { commissionSettlementApi } from '../api/commissionSettlementApi';
 
 interface Props {
@@ -56,21 +59,28 @@ export function CommissionPayablesScreen({ navigation }: Props) {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('pending_settlement');
   const [initiating, setInitiating] = useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    title: string; message?: string; confirmLabel?: string;
+    icon?: string; onConfirm: () => void;
+  } | null>(null);
 
   const isPendingView = statusFilter === 'pending_settlement';
 
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity
-          style={{ marginRight: theme.spacing.md }}
-          onPress={() => navigation.navigate('CommissionSettlements')}
-        >
-          <Ionicons name="time-outline" size={22} color={theme.colors.primary} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: theme.spacing.sm }}>
+          <RefreshButton onPress={refetch} isFetching={isFetching} />
+          <TouchableOpacity
+            style={{ padding: 4 }}
+            onPress={() => navigation.navigate('CommissionSettlements')}
+          >
+            <Ionicons name="time-outline" size={22} color={theme.colors.primary} />
+          </TouchableOpacity>
+        </View>
       ),
     });
-  }, [navigation, theme]);
+  }, [navigation, theme, refetch, isFetching]);
 
   // Grouped summary — only used for pending_settlement to initiate settlements
   const summaryQuery = useQuery({
@@ -94,33 +104,29 @@ export function CommissionPayablesScreen({ navigation }: Props) {
   const records: any[] = (listQuery.data as any)?.data ?? [];
 
   const handleInitiateSettlement = (item: any) => {
-    Alert.alert(
-      'Initiate Settlement',
-      `Settle ${fmtAmt(item.totalAmount)} (${item.count} transaction${item.count === 1 ? '' : 's'}) owed by ${item.fromBranchName} to ${item.toBranchName}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Initiate',
-          onPress: async () => {
-            const key = `${item._id.fromBranchId}-${item._id.toBranchId}`;
-            setInitiating(key);
-            try {
-              const settlement = await commissionSettlementApi.createSettlement({
-                fromBranchId: item._id.fromBranchId.toString(),
-                toBranchId: item._id.toBranchId.toString(),
-              });
-              qc.invalidateQueries({ queryKey: ['commissionPayables'] });
-              qc.invalidateQueries({ queryKey: ['commissionSettlements'] });
-              navigation.navigate('CommissionSettlementDetail', { settlementId: settlement._id });
-            } catch (e: any) {
-              Alert.alert('Error', parseApiError(e) ?? 'Failed to initiate settlement');
-            } finally {
-              setInitiating(null);
-            }
-          },
-        },
-      ],
-    );
+    setConfirmSheet({
+      title: 'Initiate Settlement',
+      message: `Settle ${fmtAmt(item.totalAmount)} (${item.count} transaction${item.count === 1 ? '' : 's'}) owed by ${item.fromBranchName} to ${item.toBranchName}?`,
+      confirmLabel: 'Initiate',
+      icon: 'swap-horizontal-outline',
+      onConfirm: async () => {
+        const key = `${item._id.fromBranchId}-${item._id.toBranchId}`;
+        setInitiating(key);
+        try {
+          const settlement = await commissionSettlementApi.createSettlement({
+            fromBranchId: item._id.fromBranchId.toString(),
+            toBranchId: item._id.toBranchId.toString(),
+          });
+          qc.invalidateQueries({ queryKey: ['commissionPayables'] });
+          qc.invalidateQueries({ queryKey: ['commissionSettlements'] });
+          navigation.navigate('CommissionSettlementDetail', { settlementId: settlement._id });
+        } catch (e: any) {
+          showToast('error', 'Error', parseApiError(e) ?? 'Failed to initiate settlement');
+        } finally {
+          setInitiating(null);
+        }
+      },
+    });
   };
 
   const renderSummaryItem = ({ item }: { item: any }) => {
@@ -260,6 +266,15 @@ export function CommissionPayablesScreen({ navigation }: Props) {
         windowSize={5}
         initialNumToRender={10}
         keyboardShouldPersistTaps="handled"
+      />
+      <ConfirmSheet
+        visible={!!confirmSheet}
+        title={confirmSheet?.title ?? ''}
+        message={confirmSheet?.message}
+        confirmLabel={confirmSheet?.confirmLabel}
+        icon={confirmSheet?.icon}
+        onConfirm={() => { confirmSheet?.onConfirm(); setConfirmSheet(null); }}
+        onClose={() => setConfirmSheet(null)}
       />
     </View>
   );

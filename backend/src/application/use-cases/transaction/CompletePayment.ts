@@ -28,7 +28,7 @@ export default class CompletePayment {
   }
 
   async execute(params: any): Promise<any> {
-    const { tenantId, transactionId, userId, payoutPhotoUrl, actorName, actorUsername } = params;
+    const { tenantId, transactionId, userId, payoutPhotoUrl, commissionDeducted, actorName, actorUsername } = params;
 
     const transaction = await this.transactionRepository.findById(tenantId, transactionId);
     if (!transaction) throw new NotFoundError('Transaction');
@@ -42,11 +42,9 @@ export default class CompletePayment {
 
     const isPayoutSide = (transaction.commissionSide === COMMISSION_SIDE.PAYOUT || transaction.commissionSide === COMMISSION_SIDE.PAYOUT_EXTRA);
 
-    // Fetch tenant up front whenever there's commission to handle — needed to decide between
-    // the enterprise 3-way split and the legacy aangadia single-branch + masterCommissionPct
-    // flow, on both sides (the legacy masterCommissionPct path below needs businessType too).
-    // Enterprise + payout-side: the split is computed now (before completion is persisted) so
-    // its snapshot can be saved on the transaction in the same update as payoutPhotoUrl.
+    // Resolve mode early — needed for the earning-branch snapshot saved on the transaction.
+    const useExtraMode = !commissionDeducted;
+
     let tenant: any = null;
     let commissionSplitParts: ReturnType<typeof Commission.splitEnterprise> | null = null;
     let commissionSplitSnapshot: any = null;
@@ -58,10 +56,13 @@ export default class CompletePayment {
           throw new BusinessRuleError('Commission split (branch % / head office %) is not configured for this company — cannot complete payment');
         }
         commissionSplitParts = Commission.splitEnterprise(transaction.commissionAmount, split.branchPct, split.headOfficePct);
+        // Earning branch depends on mode: extra → payout branch collects from receiver; deduct → collection branch retains
+        const earningBranchId = useExtraMode ? transaction.payoutBranchId : transaction.collectionBranchId;
+        const otherBranchId   = useExtraMode ? transaction.collectionBranchId : transaction.payoutBranchId;
         commissionSplitSnapshot = {
-          earningBranchId: transaction.payoutBranchId,
+          earningBranchId,
           ownShareAmount: commissionSplitParts.ownShareAmount,
-          otherBranchId: transaction.collectionBranchId,
+          otherBranchId,
           otherBranchShareAmount: commissionSplitParts.otherBranchShareAmount,
           headOfficeOwnShareAmount: commissionSplitParts.headOfficeOwnShareAmount,
         };
@@ -71,45 +72,56 @@ export default class CompletePayment {
     const completed = await this.transactionRepository.completePayment(tenantId, transactionId, {
       payoutPhotoUrl: payoutPhotoUrl || null,
       ...(commissionSplitSnapshot && { commissionSplit: commissionSplitSnapshot }),
-    });
+    }, userId);
     if (!completed) throw new BusinessRuleError('Transaction already completed');
 
-    // Payout debit — always finalAmount (correct for all commission sides)
+    // Extra mode: debit the full amount (what was physically paid to receiver) but only clear
+    // the finalAmount that was committed at approval — hence committedPayoutAmount override.
+    const payoutDebitAmount = useExtraMode ? completed.amount : completed.finalAmount;
+    const payoutDesc = useExtraMode
+      ? `Paid ₹${completed.amount} to receiver — Token ${completed.tokenNumber}`
+      : `Paid ₹${completed.finalAmount} to receiver (₹${completed.commissionAmount} commission deducted) — Token ${completed.tokenNumber}`;
+
     await this.branchLedgerRepository.addEntry(tenantId, completed.payoutBranchId.toString(), {
       transactionId: completed._id,
       type: 'debit',
-      amount: completed.finalAmount,
-      description: `Paid out ₹${completed.finalAmount} — Token ${completed.tokenNumber}`,
+      amount: payoutDebitAmount,
+      description: payoutDesc,
       event: 'payout_completed',
       tokenNumber: completed.tokenNumber,
+      ...(useExtraMode && { committedPayoutAmount: completed.finalAmount }),
     });
 
-    // Receiver-side partner (Lenar) — branch still pays finalAmount out in full (above,
-    // unchanged); the partner's balance separately moves toward "OWES US" by the same
-    // amount, since the branch fronted that cash on the partner's behalf. No cap/onHold —
-    // unlike the sender side, this is new debt, not consumption of existing credit.
+    // Receiver-side partner (Lenar) — the payout branch delivers cash TO this partner/receiver,
+    // so the partner's balance INCREASES (they received money from the branch).
     if (completed.payoutExternalAccountId && completed.finalAmount > 0) {
       const payoutPartner = await ExternalAccountModel.findOne({ _id: completed.payoutExternalAccountId, tenantId });
       if (payoutPartner) {
-        const balBefore = payoutPartner.balance;
-        const balAfter = balBefore - completed.finalAmount;
+        const pytBranchIdStr = completed.payoutBranchId.toString();
+        const branchBalBefore = (payoutPartner.balances as any)?.get?.(pytBranchIdStr)
+          ?? (payoutPartner.balances as any)?.[pytBranchIdStr]
+          ?? payoutPartner.balance;
+        const balBefore = branchBalBefore;
+        const balAfter = balBefore + completed.finalAmount;
         await ExternalLedgerModel.create({
           tenantId,
           externalAccountId: payoutPartner._id,
           transactionId: completed._id,
-          type: 'due',
-          direction: 'debit',
+          branchId: completed.payoutBranchId,
+          type: 'deposit',
+          direction: 'credit',
           amount: completed.finalAmount,
           balanceBefore: balBefore,
           balanceAfter: balAfter,
-          description: `Token ${completed.tokenNumber} — paid out on partner's behalf`,
+          description: `Token ${completed.tokenNumber} — received ₹${completed.finalAmount}`,
           entryDate: todayIST(),
           createdBy: userId,
           createdByName: actorName || null,
         });
+        const pytBranchId = completed.payoutBranchId.toString();
         await ExternalAccountModel.updateOne(
           { _id: payoutPartner._id, tenantId },
-          { $inc: { balance: -completed.finalAmount } },
+          { $inc: { balance: completed.finalAmount, [`balances.${pytBranchId}`]: completed.finalAmount } },
         );
       }
     }
@@ -120,115 +132,106 @@ export default class CompletePayment {
       this.branchRepository.findById(tenantId, completed.payoutBranchId.toString()),
     ]);
 
-    // Commission handling — only applies when payout/payout_extra side and commission > 0
-    let creditToSender = false;
-    if (isPayoutSide && completed.commissionAmount > 0 && tenant?.businessType === 'enterprise' && commissionSplitParts) {
-      // Enterprise: payout branch earns the full commission immediately — unchanged amount/
-      // timing from today — then settles its combined share with Head Office alone.
-      // masterCommissionPct and creditCommissionToSendingBranch are bypassed entirely.
-      await this.branchLedgerRepository.addEntry(tenantId, completed.payoutBranchId.toString(), {
-        transactionId: completed._id,
-        type: 'credit',
-        amount: completed.commissionAmount,
-        description: `Commission earned ₹${completed.commissionAmount} — Token ${completed.tokenNumber}`,
-        event: 'commission_earned',
-        tokenNumber: completed.tokenNumber,
-      });
-
-      this.hqCommissionItemRepository.create({
-        tenantId,
-        branchId: completed.payoutBranchId,
-        branchName: payoutBranch?.name || '',
-        branchCode: payoutBranch?.code || '',
-        transactionId: completed._id,
-        tokenNumber: completed.tokenNumber,
-        commissionAmount: completed.commissionAmount,
-        hqSharePct: commissionSplitParts.hqSharePct,
-        hqShareAmount: commissionSplitParts.hqShareAmount,
-        otherBranchId: completed.collectionBranchId,
-        otherBranchName: collectionBranch?.name || '',
-        otherBranchCode: collectionBranch?.code || '',
-        otherBranchShareAmount: commissionSplitParts.otherBranchShareAmount,
-        headOfficeOwnShareAmount: commissionSplitParts.headOfficeOwnShareAmount,
-      }).catch(() => {});
-    } else if (isPayoutSide && completed.commissionAmount > 0) {
-      creditToSender = tenant?.features?.creditCommissionToSendingBranch === true;
-
-      if (creditToSender) {
-        // Flag ON: payout branch owes commission to collection (sending) branch
-        const collName = collectionBranch ? `${collectionBranch.name} (${collectionBranch.code})` : 'collection branch';
-        const payName = payoutBranch ? `${payoutBranch.name} (${payoutBranch.code})` : 'payout branch';
-
-        // Payout branch: commissionPayable increases — effective balance drops
-        await this.branchLedgerRepository.addEntry(tenantId, completed.payoutBranchId.toString(), {
-          transactionId: completed._id,
-          type: 'debit',
-          amount: completed.commissionAmount,
-          description: `Commission payable to ${collName} — Token ${completed.tokenNumber}`,
-          event: 'commission_payable',
-          tokenNumber: completed.tokenNumber,
-        });
-
-        // Collection branch: commissionReceivable increases — effective balance rises
+    // Commission routing — mode-based (overrides all flags):
+    //   Extra mode: MUM earned it by collecting cash from receiver on-site → credit payout branch
+    //   Deduct mode: AHM earned it by setting a lower payout commitment → credit collection branch
+    if (isPayoutSide && completed.commissionAmount > 0) {
+      if (useExtraMode) {
+        // Extra mode: payout branch (MUM) earns commission
+        if (tenant?.businessType === 'enterprise' && commissionSplitParts) {
+          await this.branchLedgerRepository.addEntry(tenantId, completed.payoutBranchId.toString(), {
+            transactionId: completed._id,
+            type: 'credit',
+            amount: completed.commissionAmount,
+            description: `Commission ₹${completed.commissionAmount} collected from receiver — Token ${completed.tokenNumber}`,
+            event: 'commission_earned',
+            tokenNumber: completed.tokenNumber,
+          });
+          this.hqCommissionItemRepository.create({
+            tenantId,
+            branchId: completed.payoutBranchId,
+            branchName: payoutBranch?.name || '',
+            branchCode: payoutBranch?.code || '',
+            transactionId: completed._id,
+            tokenNumber: completed.tokenNumber,
+            commissionAmount: completed.commissionAmount,
+            hqSharePct: commissionSplitParts.hqSharePct,
+            hqShareAmount: commissionSplitParts.hqShareAmount,
+            otherBranchId: completed.collectionBranchId,
+            otherBranchName: collectionBranch?.name || '',
+            otherBranchCode: collectionBranch?.code || '',
+            otherBranchShareAmount: commissionSplitParts.otherBranchShareAmount,
+            headOfficeOwnShareAmount: commissionSplitParts.headOfficeOwnShareAmount,
+          }).catch(() => {});
+        } else {
+          await this.branchLedgerRepository.addEntry(tenantId, completed.payoutBranchId.toString(), {
+            transactionId: completed._id,
+            type: 'credit',
+            amount: completed.commissionAmount,
+            description: `Commission ₹${completed.commissionAmount} collected from receiver — Token ${completed.tokenNumber}`,
+            event: 'commission_earned',
+            tokenNumber: completed.tokenNumber,
+          });
+          // Legacy HQ item for non-enterprise
+          const hqSharePct: number = (payoutBranch?.masterCommissionPct ?? 0);
+          if (hqSharePct > 0) {
+            this.hqCommissionItemRepository.create({
+              tenantId,
+              branchId: payoutBranch._id,
+              branchName: payoutBranch.name as string,
+              branchCode: payoutBranch.code as string,
+              transactionId: completed._id,
+              tokenNumber: completed.tokenNumber,
+              commissionAmount: completed.commissionAmount,
+              hqSharePct,
+              hqShareAmount: Math.round(completed.commissionAmount * hqSharePct / 100),
+            }).catch(() => {});
+          }
+        }
+      } else {
+        // Deduct mode: collection branch (AHM) earns commission
         await this.branchLedgerRepository.addEntry(tenantId, completed.collectionBranchId.toString(), {
           transactionId: completed._id,
           type: 'credit',
           amount: completed.commissionAmount,
-          description: `Commission receivable from ${payName} — Token ${completed.tokenNumber}`,
-          event: 'commission_receivable',
-          tokenNumber: completed.tokenNumber,
-        });
-
-        // Advance CommissionPayable to pending_settlement (created at expected on transaction creation)
-        // If record doesn't exist (flag was OFF at creation), create it now as a safety net
-        const existing = await this.commissionPayableRepository.findByTransactionId(tenantId, completed._id.toString());
-        if (existing) {
-          await this.commissionPayableRepository.updateStatusByTransactionId(tenantId, completed._id.toString(), 'pending_settlement');
-        } else {
-          await this.commissionPayableRepository.create({
-            tenantId,
-            fromBranchId: completed.payoutBranchId,
-            fromBranchName: payoutBranch?.name || '',
-            fromBranchCode: payoutBranch?.code || '',
-            toBranchId: completed.collectionBranchId,
-            toBranchName: collectionBranch?.name || '',
-            toBranchCode: collectionBranch?.code || '',
-            transactionId: completed._id,
-            tokenNumber: completed.tokenNumber,
-            amount: completed.commissionAmount,
-            status: 'pending_settlement',
-          });
-        }
-      } else {
-        // Flag OFF (default): payout branch earns commission immediately
-        await this.branchLedgerRepository.addEntry(tenantId, completed.payoutBranchId.toString(), {
-          transactionId: completed._id,
-          type: 'credit',
-          amount: completed.commissionAmount,
-          description: `Commission earned ₹${completed.commissionAmount} — Token ${completed.tokenNumber}`,
+          description: `Commission ₹${completed.commissionAmount} earned (deducted from receiver payout) — Token ${completed.tokenNumber}`,
           event: 'commission_earned',
           tokenNumber: completed.tokenNumber,
         });
-      }
-    }
-
-    // Legacy masterCommissionPct-based HQ item creation — aangadia tenants only. Enterprise
-    // tenants are handled entirely above (payout-side) or in CreateTransaction.ts (collection-side).
-    if (tenant?.businessType !== 'enterprise') {
-      const earningBranch = isPayoutSide ? payoutBranch : collectionBranch;
-      const hqSharePct: number = (earningBranch?.masterCommissionPct ?? 0);
-      if (completed.commissionAmount > 0 && hqSharePct > 0 && !creditToSender) {
-        this.hqCommissionItemRepository.create({
-          tenantId,
-          branchId: earningBranch._id,
-          branchName: earningBranch.name as string,
-          branchCode: earningBranch.code as string,
-          transactionId: completed._id,
-          tokenNumber: completed.tokenNumber,
-          commissionAmount: completed.commissionAmount,
-          hqSharePct,
-          hqShareAmount: Math.round(completed.commissionAmount * hqSharePct / 100),
-        }).catch(() => {});
+        // HO commission item — collection branch is the earner
+        if (tenant?.businessType === 'enterprise' && commissionSplitParts) {
+          this.hqCommissionItemRepository.create({
+            tenantId,
+            branchId: completed.collectionBranchId,
+            branchName: collectionBranch?.name || '',
+            branchCode: collectionBranch?.code || '',
+            transactionId: completed._id,
+            tokenNumber: completed.tokenNumber,
+            commissionAmount: completed.commissionAmount,
+            hqSharePct: commissionSplitParts.hqSharePct,
+            hqShareAmount: commissionSplitParts.hqShareAmount,
+            otherBranchId: completed.payoutBranchId,
+            otherBranchName: payoutBranch?.name || '',
+            otherBranchCode: payoutBranch?.code || '',
+            otherBranchShareAmount: commissionSplitParts.otherBranchShareAmount,
+            headOfficeOwnShareAmount: commissionSplitParts.headOfficeOwnShareAmount,
+          }).catch(() => {});
+        } else if (tenant?.businessType !== 'enterprise') {
+          const hqSharePct: number = (collectionBranch?.masterCommissionPct ?? 0);
+          if (hqSharePct > 0) {
+            this.hqCommissionItemRepository.create({
+              tenantId,
+              branchId: collectionBranch._id,
+              branchName: collectionBranch.name as string,
+              branchCode: collectionBranch.code as string,
+              transactionId: completed._id,
+              tokenNumber: completed.tokenNumber,
+              commissionAmount: completed.commissionAmount,
+              hqSharePct,
+              hqShareAmount: Math.round(completed.commissionAmount * hqSharePct / 100),
+            }).catch(() => {});
+          }
+        }
       }
     }
 

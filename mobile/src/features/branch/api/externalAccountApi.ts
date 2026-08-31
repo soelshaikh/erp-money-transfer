@@ -16,3 +16,26 @@ export const externalAccountApi = {
   getLedger: (id: string, params?: { fromDate?: string; toDate?: string }) =>
     apiClient.get(`/external-accounts/${id}/ledger`, { params }).then((r) => r.data.data),
 };
+
+export const partnerTransferApi = {
+  list: (params?: { externalAccountId?: string; status?: string; fromBranchId?: string; toBranchId?: string; page?: number; limit?: number }) =>
+    apiClient.get('/partner-transfers', { params }).then((r) => r.data.data),
+
+  getOne: (id: string) =>
+    apiClient.get(`/partner-transfers/${id}`).then((r) => r.data.data),
+
+  create: (body: { externalAccountId: string; fromBranchId: string; toBranchId: string; amount: number; remarks?: string }) =>
+    apiClient.post('/partner-transfers', body).then((r) => r.data.data),
+
+  approve: (id: string) =>
+    apiClient.post(`/partner-transfers/${id}/approve`).then((r) => r.data.data),
+
+  complete: (id: string) =>
+    apiClient.post(`/partner-transfers/${id}/complete`).then((r) => r.data.data),
+
+  cancel: (id: string, reason?: string) =>
+    apiClient.post(`/partner-transfers/${id}/cancel`, { reason }).then((r) => r.data.data),
+
+  reject: (id: string, reason: string) =>
+    apiClient.post(`/partner-transfers/${id}/reject`, { reason }).then((r) => r.data.data),
+};

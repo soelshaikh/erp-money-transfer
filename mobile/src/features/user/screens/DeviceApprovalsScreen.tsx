@@ -6,8 +6,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert,
 } from 'react-native';
+import { showToast } from '../../../utils/toast';
+import { ConfirmSheet } from '../../../shared/components/ConfirmSheet';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../../theme/TenantThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
@@ -264,7 +265,7 @@ function SessionCard({
               style={[theme.typography.caption, { color: theme.colors.textSecondary }]}
               numberOfLines={1}
             >
-              @{username}
+              {username}
             </Text>
             {role ? <RoleBadge role={role} theme={theme} /> : null}
           </View>
@@ -444,6 +445,10 @@ export function DeviceApprovalsScreen() {
 
   const [activeTab, setActiveTab] = useState<'pending' | 'all'>('pending');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    title: string; message?: string; confirmLabel?: string;
+    destructive?: boolean; icon?: string; onConfirm: () => void;
+  } | null>(null);
 
   // ── Queries ──────────────────────────────────────────────────────────────────
 
@@ -475,7 +480,7 @@ export function DeviceApprovalsScreen() {
     onSettled: () => setActionLoadingId(null),
     onSuccess: () => invalidateBoth(),
     onError: (err: any) => {
-      Alert.alert('Error', parseApiError(err) ?? 'Failed to approve session');
+      showToast('error', 'Error', parseApiError(err) ?? 'Failed to approve session');
     },
   });
 
@@ -485,7 +490,7 @@ export function DeviceApprovalsScreen() {
     onSettled: () => setActionLoadingId(null),
     onSuccess: () => invalidateBoth(),
     onError: (err: any) => {
-      Alert.alert('Error', parseApiError(err) ?? 'Failed to reject session');
+      showToast('error', 'Error', parseApiError(err) ?? 'Failed to reject session');
     },
   });
 
@@ -495,7 +500,7 @@ export function DeviceApprovalsScreen() {
     onSettled: () => setActionLoadingId(null),
     onSuccess: () => invalidateBoth(),
     onError: (err: any) => {
-      Alert.alert('Error', parseApiError(err) ?? 'Failed to suspend session');
+      showToast('error', 'Error', parseApiError(err) ?? 'Failed to suspend session');
     },
   });
 
@@ -506,33 +511,25 @@ export function DeviceApprovalsScreen() {
   };
 
   const handleReject = (id: string) => {
-    Alert.alert(
-      'Confirm Reject',
-      'Are you sure you want to reject this device session? The user will not be able to log in from this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: () => rejectMutation.mutate(id),
-        },
-      ]
-    );
+    setConfirmSheet({
+      title: 'Reject Device Session',
+      message: 'The user will not be able to log in from this device.',
+      confirmLabel: 'Reject',
+      destructive: true,
+      icon: 'close-circle-outline',
+      onConfirm: () => rejectMutation.mutate(id),
+    });
   };
 
   const handleSuspend = (id: string) => {
-    Alert.alert(
-      'Confirm Suspend',
-      'Are you sure you want to suspend this device session? The user will be logged out from this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Suspend',
-          style: 'destructive',
-          onPress: () => suspendMutation.mutate(id),
-        },
-      ]
-    );
+    setConfirmSheet({
+      title: 'Suspend Device Session',
+      message: 'The user will be logged out from this device immediately.',
+      confirmLabel: 'Suspend',
+      destructive: true,
+      icon: 'lock-closed-outline',
+      onConfirm: () => suspendMutation.mutate(id),
+    });
   };
 
   // ── Loading state ────────────────────────────────────────────────────────────
@@ -551,6 +548,7 @@ export function DeviceApprovalsScreen() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
+    <>
     <FlatList<DeviceSession>
       style={{ flex: 1, backgroundColor: theme.colors.background }}
       contentContainerStyle={{
@@ -644,5 +642,16 @@ export function DeviceApprovalsScreen() {
       initialNumToRender={10}
       keyboardShouldPersistTaps="handled"
     />
+    <ConfirmSheet
+      visible={!!confirmSheet}
+      title={confirmSheet?.title ?? ''}
+      message={confirmSheet?.message}
+      confirmLabel={confirmSheet?.confirmLabel}
+      destructive={confirmSheet?.destructive}
+      icon={confirmSheet?.icon}
+      onConfirm={() => { confirmSheet?.onConfirm(); setConfirmSheet(null); }}
+      onClose={() => setConfirmSheet(null)}
+    />
+    </>
   );
 }

@@ -8,7 +8,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   TextInput,
 } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,6 +19,7 @@ import { useAuthStore } from '../../../store/authStore';
 import { transactionApi } from '../api/transactionApi';
 import { branchApi } from '../../branch/api/branchApi';
 import { parseApiError } from '../../../utils/apiError';
+import { showToast } from '../../../utils/toast';
 import { withAlpha } from '../../../utils/colors';
 import { fmtAmt } from '../../../utils/fmt';
 import { todayIST } from '../../../utils/dateIST';
@@ -192,7 +192,7 @@ export function ShakhaEntryScreen({ navigation }: Props) {
   const [payoutBranchId, setPayoutBranchId] = useState<string | null>(null);
   const [mokalnarName, setMokalnarName] = useState('');
   const [mokalnarMobile, setMokalnarMobile] = useState('');
-  const [commissionSide, setCommissionSide] = useState<'collection' | 'payout' | 'payout_extra'>('collection');
+  const [commissionSide, setCommissionSide] = useState<'collection' | 'payout'>('collection');
   const [overrideCommission, setOverrideCommission] = useState(false);
   const [commissionType, setCommissionType] = useState<'flat' | 'percentage'>('flat');
   const [commissionValue, setCommissionValue] = useState('');
@@ -248,11 +248,23 @@ export function ShakhaEntryScreen({ navigation }: Props) {
   const payoutPartners: any[] = (payoutPartnersData as any) || [];
   const selectedPayoutPartner = payoutPartners.find((p: any) => p._id === payoutExternalAccountId) || null;
 
+  // Special branch: internal branch — no default commission, override-only
+  const isSpecialTransaction = !!(myBranch?.isSpecific || selectedBranch?.isSpecific);
+
   // Payout branch changed — the previously selected payout-side partner no longer applies
   useEffect(() => {
     setPayoutExternalAccountId(null);
     if (!payoutBranchId) setLenarMode('type');
   }, [payoutBranchId]);
+
+  // When a special branch is involved, reset commission state
+  useEffect(() => {
+    if (isSpecialTransaction) {
+      setOverrideCommission(false);
+      setCommissionSide('collection');
+      setCommissionValue('');
+    }
+  }, [isSpecialTransaction]);
 
   // today's entries
   const { data: todayRaw, refetch: refetchToday } = useQuery({
@@ -359,10 +371,10 @@ export function ShakhaEntryScreen({ navigation }: Props) {
       qc.invalidateQueries({ queryKey: ['external-accounts'] });
       refetchToday();
       clearForm();
-      Alert.alert(t('common.success'), `Token: ${data.tokenNumber}\n${fmtAmt(Number(data.amount))}`);
+      showToast('success', t('common.success'), `Token: ${data.tokenNumber} · ${fmtAmt(Number(data.amount))}`);
     },
     onError: (err: any) => {
-      Alert.alert('Error', parseApiError(err) || 'Something went wrong');
+      showToast('error', 'Error', parseApiError(err) || 'Something went wrong');
     },
   });
 
@@ -416,42 +428,43 @@ export function ShakhaEntryScreen({ navigation }: Props) {
             </Field>
           </View>
 
-          {/* Commission side */}
-          <View style={{ marginBottom: 12 }}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 6 }}>
-              {t('txn.commissionSide')}
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {([
-                { value: 'collection',   label: t('txn.senderPays'),        sub: t('txn.senderPaysSub') },
-                { value: 'payout',       label: t('txn.receiverPays'),      sub: t('txn.receiverPaysSub') },
-                { value: 'payout_extra', label: t('txn.receiverPaysExtra'), sub: t('txn.receiverPaysExtraSub') },
-              ] as const).map((opt) => {
-                const sel = commissionSide === opt.value;
-                return (
-                  <TouchableOpacity
-                    key={opt.value}
-                    onPress={() => setCommissionSide(opt.value)}
-                    activeOpacity={0.7}
-                    style={{
-                      flex: 1, paddingVertical: 9, paddingHorizontal: 8,
-                      borderRadius: 8, borderWidth: 1.5,
-                      borderColor: sel ? theme.colors.primary : theme.colors.border,
-                      backgroundColor: sel ? withAlpha(theme.colors.primary, 0.08) : theme.colors.surface,
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: sel ? theme.colors.primary : theme.colors.text, marginBottom: 1 }}>
-                      {opt.label}
-                    </Text>
-                    <Text style={{ fontSize: 10, color: sel ? theme.colors.primary : theme.colors.textSecondary }} allowFontScaling={false}>
-                      {opt.sub}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+          {/* Commission side — hidden for special (internal) branches */}
+          {!isSpecialTransaction && (
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 6 }}>
+                {t('txn.commissionSide')}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {([
+                  { value: 'collection', label: t('txn.senderPays'),   sub: t('txn.senderPaysSub') },
+                  { value: 'payout',     label: t('txn.receiverPays'), sub: t('txn.receiverPaysSub') },
+                ] as const).map((opt) => {
+                  const sel = commissionSide === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      onPress={() => setCommissionSide(opt.value)}
+                      activeOpacity={0.7}
+                      style={{
+                        flex: 1, paddingVertical: 9, paddingHorizontal: 8,
+                        borderRadius: 8, borderWidth: 1.5,
+                        borderColor: sel ? theme.colors.primary : theme.colors.border,
+                        backgroundColor: sel ? withAlpha(theme.colors.primary, 0.08) : theme.colors.surface,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: sel ? theme.colors.primary : theme.colors.text, marginBottom: 1 }}>
+                        {opt.label}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: sel ? theme.colors.primary : theme.colors.textSecondary }} allowFontScaling={false}>
+                        {opt.sub}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Mukkam dropdown */}
           <View style={{ marginBottom: 12 }}>
@@ -558,12 +571,12 @@ export function ShakhaEntryScreen({ navigation }: Props) {
             </View>
           )}
 
-          {/* Live commission preview — reacts to override values */}
-          {(() => {
+          {/* Live commission preview — hidden for special (internal) branches */}
+          {!isSpecialTransaction && (() => {
             const parsedAmt = parseFloat(amount) || 0;
             if (parsedAmt <= 0 || !payoutBranchId) return null;
             const globalComm = (settingsData as any)?.settings?.commission || {};
-            const isPayoutSide = commissionSide === 'payout' || commissionSide === 'payout_extra';
+            const isPayoutSide = commissionSide === 'payout';
             const sourceBranch = isPayoutSide ? selectedBranch : myBranch;
             const isOverrideActive = overrideCommission && canOverride && !!commissionValue;
             const isBranchConfig = !isOverrideActive && !!sourceBranch?.commissionConfig?.enabled;
@@ -598,9 +611,7 @@ export function ShakhaEntryScreen({ navigation }: Props) {
                     <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.text }} allowFontScaling={false}>₹{senderPays.toLocaleString('en-IN')}</Text>
                   </View>
                   <View>
-                    <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>
-                      {commissionSide === 'payout_extra' ? 'Extra (receiver)' : 'Commission'}
-                    </Text>
+                    <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>Commission</Text>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: accentColor }} allowFontScaling={false}>₹{cAmount.toLocaleString('en-IN')}</Text>
                   </View>
                   <View>

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useLayoutEffect } from 'react';
 import { View, Text, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
@@ -9,6 +10,7 @@ import { AppCard } from '../../../shared/components/AppCard';
 import { LoadingScreen } from '../../../shared/components/LoadingScreen';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { Ionicons } from '@expo/vector-icons';
+import { RefreshButton } from '../../../shared/components/RefreshButton';
 import { withAlpha } from '../../../utils/colors';
 import { fmtAmt, fmtDate, fmtTime } from '../../../utils/fmt';
 
@@ -19,6 +21,7 @@ interface Props {
 export function CommissionDetailScreen({ route }: Props) {
   const { t } = useTranslation();
   const theme = useTheme();
+  const navigation = useNavigation<any>();
   const tabBarHeight = useBottomTabBarHeight();
   const [page, setPage] = useState(1);
   const limit = 30;
@@ -30,6 +33,12 @@ export function CommissionDetailScreen({ route }: Props) {
     queryKey: ['commission-detail', branchId, page],
     queryFn: () => transactionApi.getCommissionDetail({ branchId: branchId || undefined, page, limit }),
   });
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => <RefreshButton onPress={refetch} isFetching={isFetching} style={{ marginRight: 8 }} />,
+    });
+  }, [refetch, isFetching]);
 
   if (isLoading) return <LoadingScreen message={t('txn.loadingComm')} />;
 

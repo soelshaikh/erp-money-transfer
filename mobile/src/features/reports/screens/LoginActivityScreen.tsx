@@ -8,8 +8,8 @@ import {
   RefreshControl,
   Modal,
   TextInput,
-  Alert,
 } from 'react-native';
+import { showToast } from '../../../utils/toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,7 @@ import { useAuthStore } from '../../../store/authStore';
 import { reportApi } from '../api/reportApi';
 import { userApi } from '../../user/api/userApi';
 import { AppCard } from '../../../shared/components/AppCard';
+import { ConfirmSheet } from '../../../shared/components/ConfirmSheet';
 import { DateRangeFilter } from '../../../shared/components/DateRangeFilter';
 import { LoadingScreen } from '../../../shared/components/LoadingScreen';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
@@ -82,7 +83,7 @@ function LoginEventCard({ item, theme }: { item: LoginEvent; theme: any }) {
             {item.role ? <RoleBadge role={item.role} theme={theme} /> : null}
           </View>
           <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
-            @{item.username}
+            {item.username}
           </Text>
           {item.employeeId ? (
             <Text style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '600', marginTop: 2 }]} numberOfLines={1} allowFontScaling={false}>
@@ -143,7 +144,7 @@ function DeviceSessionCard({
             {user?.role ? <RoleBadge role={user.role} theme={theme} /> : null}
           </View>
           <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
-            @{user?.username || '—'}{isSelf ? '  (you)' : ''}
+            {user?.username || '—'}{isSelf ? '  (you)' : ''}
           </Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs, backgroundColor: withAlpha(theme.colors.success, 0.12), borderRadius: theme.borderRadius.full, paddingHorizontal: theme.spacing.sm, paddingVertical: 3 }}>
@@ -293,7 +294,7 @@ function UserPickerModal({
                   <AvatarCircle name={item.name} theme={theme} />
                   <View style={{ flex: 1 }}>
                     <Text style={[theme.typography.label, { color: theme.colors.text }]} numberOfLines={1}>{item.name}</Text>
-                    <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>@{item.username}</Text>
+                    <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>{item.username}</Text>
                   </View>
                   <RoleBadge role={item.role} theme={theme} />
                 </TouchableOpacity>
@@ -359,6 +360,10 @@ export function LoginActivityScreen() {
   const [activeTab, setActiveTab] = useState<'history' | 'sessions'>('history');
   const [showFilters, setShowFilters] = useState(false);
   const [showUserPicker, setShowUserPicker] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    title: string; message?: string; confirmLabel?: string;
+    destructive?: boolean; icon?: string; onConfirm: () => void;
+  } | null>(null);
 
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -392,9 +397,9 @@ export function LoginActivityScreen() {
     mutationFn: () => reportApi.suspendAllSessions(),
     onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['device-sessions-approved'] });
-      Alert.alert('Done', `${result?.suspended ?? 0} session${result?.suspended !== 1 ? 's' : ''} signed out.`);
+      showToast('success', 'Done', `${result?.suspended ?? 0} session${result?.suspended !== 1 ? 's' : ''} signed out.`);
     },
-    onError: () => Alert.alert('Error', 'Failed to sign out sessions. Please try again.'),
+    onError: () => showToast('error', 'Error', 'Failed to sign out sessions. Please try again.'),
   });
 
   const suspendOneMutation = useMutation({
@@ -405,34 +410,36 @@ export function LoginActivityScreen() {
       queryClient.invalidateQueries({ queryKey: ['device-sessions-approved'] });
       queryClient.invalidateQueries({ queryKey: ['device-sessions-mine'] });
     },
-    onError: () => Alert.alert('Error', 'Failed to sign out this session. Please try again.'),
+    onError: () => showToast('error', 'Error', 'Failed to sign out this session. Please try again.'),
   });
 
   const handleSignOutOne = (sessionId: string) => {
     const session = sessions.find((s) => s._id === sessionId);
     const userId = session?.userId?._id || '';
     const isSelf = !!userId && (userId === currentUser?._id || userId === currentUser?.id);
-    Alert.alert(
-      'Sign Out Session',
-      isSelf
+    const name = session?.userId?.name || 'this user';
+    const device = session?.deviceName || 'their device';
+    setConfirmSheet({
+      title: 'Sign Out Session',
+      message: isSelf
         ? 'This will sign YOU out immediately. You will need to log in again.'
-        : `Sign out ${session?.userId?.name || 'this user'} from ${session?.deviceName || 'their device'}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: isSelf ? 'Sign Me Out' : 'Sign Out', style: 'destructive', onPress: () => suspendOneMutation.mutate(sessionId) },
-      ]
-    );
+        : `Sign out ${name} from ${device}?`,
+      confirmLabel: isSelf ? 'Sign Me Out' : 'Sign Out',
+      destructive: true,
+      icon: 'log-out-outline',
+      onConfirm: () => suspendOneMutation.mutate(sessionId),
+    });
   };
 
   const handleSignOutAll = () => {
-    Alert.alert(
-      'Sign Out All Sessions',
-      'This will immediately sign out all active devices across all users. They will need to log in again.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out All', style: 'destructive', onPress: () => suspendAllMutation.mutate() },
-      ]
-    );
+    setConfirmSheet({
+      title: 'Sign Out All Sessions',
+      message: 'This will immediately sign out all active devices across all users. They will need to log in again.',
+      confirmLabel: 'Sign Out All',
+      destructive: true,
+      icon: 'power-outline',
+      onConfirm: () => suspendAllMutation.mutate(),
+    });
   };
 
   const events: LoginEvent[] = (historyQuery.data as any) || [];
@@ -519,7 +526,7 @@ export function LoginActivityScreen() {
               >
                 <Ionicons name="person-outline" size={15} color={theme.colors.textSecondary} />
                 <Text style={[theme.typography.label, { color: selectedUser ? theme.colors.text : theme.colors.textSecondary, flex: 1 }]} numberOfLines={1}>
-                  {selectedUser ? `${selectedUser.name}  (@${selectedUser.username})` : 'All Users'}
+                  {selectedUser ? `${selectedUser.name}  (${selectedUser.username})` : 'All Users'}
                 </Text>
                 {selectedUser ? (
                   <TouchableOpacity onPress={() => setSelectedUser(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -678,6 +685,16 @@ export function LoginActivityScreen() {
         onClose={() => setShowUserPicker(false)}
         onSelect={setSelectedUser}
         theme={theme}
+      />
+      <ConfirmSheet
+        visible={!!confirmSheet}
+        title={confirmSheet?.title ?? ''}
+        message={confirmSheet?.message}
+        confirmLabel={confirmSheet?.confirmLabel}
+        destructive={confirmSheet?.destructive}
+        icon={confirmSheet?.icon}
+        onConfirm={() => { confirmSheet?.onConfirm(); setConfirmSheet(null); }}
+        onClose={() => setConfirmSheet(null)}
       />
     </>
   );

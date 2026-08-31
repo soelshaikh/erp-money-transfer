@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,7 @@ import { AppInput } from '../../../shared/components/AppInput';
 import { AppCard } from '../../../shared/components/AppCard';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
+import { showToast } from '../../../utils/toast';
 import { fmtAmt } from '../../../utils/fmt';
 import { ImagePickerButton } from '../../../shared/components/ImagePickerButton';
 import BranchPicker from '../components/BranchPicker';
@@ -51,7 +52,7 @@ export function CreateTransactionScreen({ navigation }: Props) {
     overrideCommission: boolean;
     commissionType: string;
     commissionValue: string;
-    commissionSide: 'collection' | 'payout' | 'payout_extra';
+    commissionSide: 'collection' | 'payout';
     externalAccountId: string | null;
   }>({
     payoutBranchId: null,
@@ -86,8 +87,18 @@ export function CreateTransactionScreen({ navigation }: Props) {
   const allBranches = (branchesData as any) || [];
   const payoutBranches = allBranches.filter((b: any) => b._id !== user?.branchId);
   const myBranch = allBranches.find((b: any) => b._id === user?.branchId);
+  const selectedPayoutBranch = payoutBranches.find((b: any) => b._id === form.payoutBranchId);
   const myPartners: any[] = (partnersData as any) || [];
   const selectedPartner = myPartners.find((p: any) => p._id === form.externalAccountId) || null;
+
+  // Special branch: internal branch — no default commission, override-only
+  const isSpecialTransaction = !!(myBranch?.isSpecific || selectedPayoutBranch?.isSpecific);
+
+  React.useEffect(() => {
+    if (isSpecialTransaction) {
+      setForm((f) => ({ ...f, overrideCommission: false, commissionSide: 'collection', commissionValue: '' }));
+    }
+  }, [isSpecialTransaction]);
 
   const validate = () => {
     const e: { [key: string]: string } = {};
@@ -127,10 +138,8 @@ export function CreateTransactionScreen({ navigation }: Props) {
     onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
-      Alert.alert('Transaction Created', `Token: ${data.tokenNumber}\nAmount: ${fmtAmt(Number(data.amount))}`, [
-        { text: 'View', onPress: () => navigation.replace('TransactionDetail', { transactionId: data._id }) },
-        { text: 'New', onPress: () => navigation.goBack() },
-      ]);
+      showToast('success', 'Transaction Created', `Token: ${data.tokenNumber} · ${fmtAmt(Number(data.amount))}`);
+      navigation.replace('TransactionDetail', { transactionId: data._id });
     },
   });
 
@@ -329,62 +338,63 @@ export function CreateTransactionScreen({ navigation }: Props) {
         <AppCard style={{ marginBottom: theme.spacing.md }}>
           <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.md }]}>{t('txn.amountSection')}</Text>
 
-          {/* Commission side selector */}
-          <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm }]}>
-            {t('txn.commissionSide')}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginBottom: theme.spacing.md }}>
-            {([
-              { value: 'collection',   label: t('txn.senderPays'),      sub: t('txn.senderPaysSub') },
-              { value: 'payout',       label: t('txn.receiverPays'),    sub: t('txn.receiverPaysSub') },
-              { value: 'payout_extra', label: t('txn.receiverPaysExtra'), sub: t('txn.receiverPaysExtraSub') },
-            ] as const).map((opt) => {
-              const sel = form.commissionSide === opt.value;
-              return (
-                <TouchableOpacity
-                  key={opt.value}
-                  onPress={() => setForm((f) => ({ ...f, commissionSide: opt.value }))}
-                  activeOpacity={0.7}
-                  style={{
-                    flex: 1,
-                    paddingHorizontal: theme.spacing.xs,
-                    paddingVertical: 10,
-                    borderRadius: theme.borderRadius.md,
-                    borderWidth: 1.5,
-                    borderColor: sel ? theme.colors.primary : theme.colors.border,
-                    backgroundColor: sel ? withAlpha(theme.colors.primary, 0.08) : theme.colors.inputBackground,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={[theme.typography.label, { color: sel ? theme.colors.primary : theme.colors.textSecondary, marginBottom: 2 }]}>
-                    {opt.label}
-                  </Text>
-                  <Text style={[theme.typography.caption, { color: sel ? theme.colors.primary : theme.colors.textSecondary, textAlign: 'center' }]} allowFontScaling={false}>
-                    {opt.sub}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {/* Commission side selector — hidden for special (internal) branches */}
+          {!isSpecialTransaction && (
+            <>
+              <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm }]}>
+                {t('txn.commissionSide')}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginBottom: theme.spacing.md }}>
+                {([
+                  { value: 'collection', label: t('txn.senderPays'),   sub: t('txn.senderPaysSub') },
+                  { value: 'payout',     label: t('txn.receiverPays'), sub: t('txn.receiverPaysSub') },
+                ] as const).map((opt) => {
+                  const sel = form.commissionSide === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      onPress={() => setForm((f) => ({ ...f, commissionSide: opt.value }))}
+                      activeOpacity={0.7}
+                      style={{
+                        flex: 1,
+                        paddingHorizontal: theme.spacing.xs,
+                        paddingVertical: 10,
+                        borderRadius: theme.borderRadius.md,
+                        borderWidth: 1.5,
+                        borderColor: sel ? theme.colors.primary : theme.colors.border,
+                        backgroundColor: sel ? withAlpha(theme.colors.primary, 0.08) : theme.colors.inputBackground,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={[theme.typography.label, { color: sel ? theme.colors.primary : theme.colors.textSecondary, marginBottom: 2 }]}>
+                        {opt.label}
+                      </Text>
+                      <Text style={[theme.typography.caption, { color: sel ? theme.colors.primary : theme.colors.textSecondary, textAlign: 'center' }]} allowFontScaling={false}>
+                        {opt.sub}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
 
-          {/* Contextual note */}
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'flex-start',
-            backgroundColor: withAlpha(theme.colors.primary, 0.06),
-            borderRadius: theme.borderRadius.sm,
-            padding: theme.spacing.sm,
-            marginBottom: theme.spacing.md,
-            gap: 6,
-          }}>
-            <Text style={[theme.typography.caption, { color: theme.colors.primary, lineHeight: 18, flex: 1 }]}>
-              {form.commissionSide === 'collection'
-                ? `${t('txn.commCollectionNote')} ${myBranch?.name || t('txn.collectionBranch')}.`
-                : form.commissionSide === 'payout_extra'
-                  ? t('txn.receiverExtraDetail')
-                  : t('txn.commPayoutNote')}
-            </Text>
-          </View>
+              {/* Contextual note */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                backgroundColor: withAlpha(theme.colors.primary, 0.06),
+                borderRadius: theme.borderRadius.sm,
+                padding: theme.spacing.sm,
+                marginBottom: theme.spacing.md,
+                gap: 6,
+              }}>
+                <Text style={[theme.typography.caption, { color: theme.colors.primary, lineHeight: 18, flex: 1 }]}>
+                  {form.commissionSide === 'collection'
+                    ? `${t('txn.commCollectionNote')} ${myBranch?.name || t('txn.collectionBranch')}.`
+                    : t('txn.commPayoutNote')}
+                </Text>
+              </View>
+            </>
+          )}
 
           <AppInput
             label={form.commissionSide === 'payout' ? t('txn.totalFromSender') : t('txn.transferAmount')}
@@ -463,13 +473,12 @@ export function CreateTransactionScreen({ navigation }: Props) {
             </View>
           )}
 
-          {/* Live commission preview — reacts to override values */}
-          {(() => {
+          {/* Live commission preview — hidden for special (internal) branches */}
+          {!isSpecialTransaction && (() => {
             const parsedAmt = parseFloat(form.amount) || 0;
             if (parsedAmt <= 0 || !form.payoutBranchId) return null;
-            const selectedPayoutBranch = payoutBranches.find((b: any) => b._id === form.payoutBranchId);
             const globalComm = (settingsData as any)?.settings?.commission || {};
-            const isPayoutSide = form.commissionSide === 'payout' || form.commissionSide === 'payout_extra';
+            const isPayoutSide = form.commissionSide === 'payout';
             const sourceBranch = isPayoutSide ? selectedPayoutBranch : myBranch;
             const isOverrideActive = form.overrideCommission && canOverrideCommission && !!form.commissionValue;
             const isBranchConfig = !isOverrideActive && !!sourceBranch?.commissionConfig?.enabled;
@@ -507,9 +516,7 @@ export function CreateTransactionScreen({ navigation }: Props) {
                     <Text style={[theme.typography.label, { color: theme.colors.text }]} allowFontScaling={false}>₹{senderPays.toLocaleString('en-IN')}</Text>
                   </View>
                   <View>
-                    <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
-                      {form.commissionSide === 'payout_extra' ? 'Extra (receiver)' : 'Commission'}
-                    </Text>
+                    <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>Commission</Text>
                     <Text style={[theme.typography.label, { color: accentColor }]} allowFontScaling={false}>₹{cAmount.toLocaleString('en-IN')}</Text>
                   </View>
                   <View>

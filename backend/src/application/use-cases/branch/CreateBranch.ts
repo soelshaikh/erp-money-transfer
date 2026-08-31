@@ -13,10 +13,15 @@ export default class CreateBranch {
   }
 
   async execute(params: any): Promise<any> {
-    const { tenantId, name, code, type, contactPerson, address, city, state, pincode, createdBy, actorName, actorUsername } = params;
+    const { tenantId, name, code, type, contactPerson, address, city, state, pincode, isSpecific, workingHours, createdBy, actorName, actorUsername } = params;
 
     const existing = await this.branchRepository.findByCode(tenantId, code);
     if (existing) throw new ConflictError(`Branch code '${code.toUpperCase()}' already exists`);
+
+    if (isSpecific) {
+      const alreadyHasSpecific = await this.branchRepository.hasSpecificBranch(tenantId);
+      if (alreadyHasSpecific) throw new ConflictError('A specific branch already exists for this company');
+    }
 
     if (type !== 'head_office') {
       const tenant = await this.tenantRepository.findById(tenantId);
@@ -31,7 +36,8 @@ export default class CreateBranch {
     }
 
     const branch = await this.branchRepository.create({
-      tenantId, name, code: code.toUpperCase(), type, contactPerson, address, city, state, pincode, createdBy,
+      tenantId, name, code: code.toUpperCase(), type, contactPerson, address, city, state, pincode, isSpecific: !!isSpecific, createdBy,
+      ...(workingHours && { workingHours }),
     });
 
     this.auditService.log({

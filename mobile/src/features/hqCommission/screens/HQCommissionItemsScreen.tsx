@@ -1,10 +1,13 @@
 import React, { useState, useLayoutEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { showToast } from '../../../utils/toast';
+import { ConfirmSheet } from '../../../shared/components/ConfirmSheet';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { RefreshButton } from '../../../shared/components/RefreshButton';
 import { withAlpha } from '../../../utils/colors';
 import { fmtAmt, fmtDate } from '../../../utils/fmt';
 import { AppCard } from '../../../shared/components/AppCard';
@@ -33,6 +36,10 @@ export function HQCommissionItemsScreen({ navigation }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [paymentMode, setPaymentMode] = useState('cash');
   const [notes, setNotes] = useState('');
+  const [confirmSheet, setConfirmSheet] = useState<{
+    title: string; message?: string; confirmLabel?: string;
+    destructive?: boolean; icon?: string; onConfirm: () => void;
+  } | null>(null);
 
   const { data: items = [], isLoading, isFetching, refetch } = useQuery<HQCommissionItem[]>({
     queryKey: ['hqCommissionItems'],
@@ -42,12 +49,15 @@ export function HQCommissionItemsScreen({ navigation }: Props) {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity onPress={() => navigation.navigate('HQCommissionSettlements')} style={{ marginRight: 12 }}>
-          <Ionicons name="time-outline" size={22} color={theme.colors.primary} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 8 }}>
+          <RefreshButton onPress={refetch} isFetching={isFetching} />
+          <TouchableOpacity onPress={() => navigation.navigate('HQCommissionSettlements')} style={{ padding: 4 }}>
+            <Ionicons name="time-outline" size={22} color={theme.colors.primary} />
+          </TouchableOpacity>
+        </View>
       ),
     });
-  }, [navigation, theme]);
+  }, [navigation, theme, refetch, isFetching]);
 
   const allSelected = items.length > 0 && selectedIds.size === items.length;
 
@@ -89,23 +99,21 @@ export function HQCommissionItemsScreen({ navigation }: Props) {
       navigation.navigate('HQCommissionSettlementDetail', { settlementId: settlement._id });
     },
     onError: (err: any) => {
-      Alert.alert('Error', parseApiError(err) || 'Failed to create settlement');
+      showToast('error', 'Error', parseApiError(err) || 'Failed to create settlement');
     },
   });
 
   const handleProcess = () => {
     if (selectedIds.size === 0) {
-      Alert.alert('Select Items', 'Please select at least one commission item to process.');
+      showToast('info', 'Select Items', 'Please select at least one commission item to process.');
       return;
     }
-    Alert.alert(
-      t('hqComm.processSelected'),
-      `${selectedIds.size} ${t('hqComm.selected')} · ${t('hqComm.totalHQShare')}: ${fmtAmt(totalHQShare)}`,
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('hqComm.processSelected'), onPress: () => mutation.mutate() },
-      ],
-    );
+    setConfirmSheet({
+      title: t('hqComm.processSelected'),
+      message: `${selectedIds.size} ${t('hqComm.selected')} · ${t('hqComm.totalHQShare')}: ${fmtAmt(totalHQShare)}`,
+      confirmLabel: t('hqComm.processSelected'),
+      onConfirm: () => mutation.mutate(),
+    });
   };
 
   if (isLoading) return <LoadingScreen message={t('hqComm.loading')} />;
@@ -190,6 +198,7 @@ export function HQCommissionItemsScreen({ navigation }: Props) {
   };
 
   return (
+    <>
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <FlatList
         data={items}
@@ -289,5 +298,16 @@ export function HQCommissionItemsScreen({ navigation }: Props) {
         </View>
       )}
     </View>
+    <ConfirmSheet
+      visible={!!confirmSheet}
+      title={confirmSheet?.title ?? ''}
+      message={confirmSheet?.message}
+      confirmLabel={confirmSheet?.confirmLabel}
+      destructive={confirmSheet?.destructive}
+      icon={confirmSheet?.icon}
+      onConfirm={() => { confirmSheet?.onConfirm(); setConfirmSheet(null); }}
+      onClose={() => setConfirmSheet(null)}
+    />
+    </>
   );
 }

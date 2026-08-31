@@ -126,11 +126,21 @@ import UpdateExternalAccount from './application/use-cases/externalAccount/Updat
 import AddExternalEntry from './application/use-cases/externalAccount/AddExternalEntry';
 import GetExternalLedger from './application/use-cases/externalAccount/GetExternalLedger';
 
+// Use-cases — Partner Transfers
+import CreatePartnerTransfer from './application/use-cases/partnerTransfer/CreatePartnerTransfer';
+import ApprovePartnerTransfer from './application/use-cases/partnerTransfer/ApprovePartnerTransfer';
+import CompletePartnerTransfer from './application/use-cases/partnerTransfer/CompletePartnerTransfer';
+import CancelPartnerTransfer from './application/use-cases/partnerTransfer/CancelPartnerTransfer';
+import RejectPartnerTransfer from './application/use-cases/partnerTransfer/RejectPartnerTransfer';
+import GetPartnerTransfers from './application/use-cases/partnerTransfer/GetPartnerTransfers';
+
 // Controllers
 import ExternalAccountController from './interfaces/http/controllers/ExternalAccountController';
+import PartnerTransferController from './interfaces/http/controllers/PartnerTransferController';
 
 // Routes
 import externalAccountRoutes from './interfaces/http/routes/external-account.routes';
+import partnerTransferRoutes from './interfaces/http/routes/partnerTransfer.routes';
 
 // Use-cases — App Install
 import RegisterAppInstall from './application/use-cases/appInstall/RegisterAppInstall';
@@ -295,6 +305,14 @@ export default function buildContainer(io: any) {
   const getExternalLedger     = new GetExternalLedger();
   const externalAccountController = new ExternalAccountController({ createExternalAccount, getExternalAccounts, updateExternalAccount, addExternalEntry, getExternalLedger });
 
+  const createPartnerTransfer   = new CreatePartnerTransfer({ branchRepository });
+  const approvePartnerTransfer  = new ApprovePartnerTransfer();
+  const completePartnerTransfer = new CompletePartnerTransfer({ branchRepository });
+  const cancelPartnerTransfer   = new CancelPartnerTransfer();
+  const rejectPartnerTransfer   = new RejectPartnerTransfer();
+  const getPartnerTransfers     = new GetPartnerTransfers();
+  const partnerTransferController = new PartnerTransferController({ createPartnerTransfer, approvePartnerTransfer, completePartnerTransfer, cancelPartnerTransfer, rejectPartnerTransfer, getPartnerTransfers });
+
   const registerAppInstall = new RegisterAppInstall();
   const requestAppAccess   = new RequestAppAccess({ notificationService });
   const approveAppAccess   = new ApproveAppAccess();
@@ -325,8 +343,8 @@ export default function buildContainer(io: any) {
     getPaymentMethodReport,
   });
   const auditLogController = new AuditLogController({ getAuditLogs });
-  const transactionController = new TransactionController({ createTransaction, approveTransaction, rejectTransaction, completePayment, getTransactions, getTransaction, transactionRepository });
-  const tenantController = new TenantController({ createTenant, updateTenantStatus, updateTenantBranchLimit, updateTenantStaffLimit, getTenants, tenantRepository, branchRepository, userRepository, createUser, resetDevData });
+  const transactionController = new TransactionController({ createTransaction, approveTransaction, rejectTransaction, completePayment, getTransactions, getTransaction, transactionRepository, branchLedgerRepository });
+  const tenantController = new TenantController({ createTenant, updateTenantStatus, updateTenantBranchLimit, updateTenantStaffLimit, getTenants, tenantRepository, branchRepository, userRepository, createUser, resetDevData, resetPassword });
   const dashboardController = new DashboardController({ getDashboard });
   const settingsController = new SettingsController({ getSettings, updateSettings });
   const deviceSessionController = new DeviceSessionController({ listDeviceSessions, approveDeviceSession, rejectDeviceSession, suspendDeviceSession, suspendAllSessions });
@@ -354,6 +372,8 @@ export default function buildContainer(io: any) {
     commissionSettlementRoutes,
     externalAccountController,
     externalAccountRoutes,
+    partnerTransferController,
+    partnerTransferRoutes,
     signOffController,
     signOffRoutes,
   };

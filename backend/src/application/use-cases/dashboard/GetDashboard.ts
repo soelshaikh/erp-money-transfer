@@ -38,7 +38,7 @@ export default class GetDashboard {
       const [branch, partners] = await Promise.all([
         this.branchRepository.findById(tenantId, branchId),
         ExternalAccountModel.find({ tenantId, status: 'active' })
-          .select('_id name code balance onHold')
+          .select('_id name code balance balances onHolds')
           .sort({ name: 1 })
           .lean(),
       ]);
@@ -50,7 +50,12 @@ export default class GetDashboard {
         result.commissionPayable = branch.commissionPayable ?? 0;
         result.commissionReceivable = branch.commissionReceivable ?? 0;
       }
-      result.partners = partners || [];
+      // Show branch-specific partner balance on branch dashboard
+      result.partners = (partners || []).map((p: any) => {
+        const balancesMap: Record<string, number> = p.balances || {};
+        const branchBalance = balancesMap[branchId?.toString()] ?? 0;
+        return { ...p, balance: branchBalance, totalBalance: p.balance ?? 0 };
+      });
     }
 
     // Head office and super admin also get branch count

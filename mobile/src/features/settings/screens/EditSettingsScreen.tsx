@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
+import { showToast } from '../../../utils/toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../../theme/TenantThemeProvider';
 import { settingsApi } from '../api/settingsApi';
@@ -96,13 +97,23 @@ export function EditSettingsScreen({ navigation }: Props) {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
-      Alert.alert('Success', 'Settings saved', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      showToast('success', 'Settings saved');
+      navigation.goBack();
     },
   });
 
   const handleSave = () => {
+    const cv = parseFloat(form.commissionValue);
+    if (!form.commissionValue.trim() || isNaN(cv) || cv < 0) {
+      showToast('error', 'Invalid', 'Enter a valid commission value (0 or more).');
+      return;
+    }
+    if (form.commissionType === 'percentage' && cv > 100) {
+      showToast('error', 'Invalid', 'Commission percentage cannot exceed 100.');
+      return;
+    }
     if (isEnterprise && splitFilled && !splitValid) {
-      Alert.alert('Invalid', '2 × Branch % + Head Office % must equal 100');
+      showToast('error', 'Invalid', '2 × Branch % + Head Office % must equal 100');
       return;
     }
     mutation.mutate();
@@ -218,11 +229,11 @@ export function EditSettingsScreen({ navigation }: Props) {
           </>
         )}
 
+        {/* WORKING HOURS — hidden for now; branch-wise manual management preferred
         <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm, marginTop: theme.spacing.md }]}>
           {t('signOff.workingHours').toUpperCase()}
         </Text>
 
-        {/* Enable toggle */}
         <TouchableOpacity
           onPress={() => setForm((f) => ({ ...f, whEnabled: !f.whEnabled }))}
           style={{
@@ -268,6 +279,7 @@ export function EditSettingsScreen({ navigation }: Props) {
             </View>
           </View>
         )}
+        */}
 
         <AppButton
           title={t('settings.saveBtn')}

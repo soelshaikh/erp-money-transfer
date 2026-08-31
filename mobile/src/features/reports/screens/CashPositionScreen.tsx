@@ -1,5 +1,5 @@
 import React, { useState, useLayoutEffect } from 'react';
-import { View, Text, ScrollView, FlatList, TouchableOpacity, TextInput, RefreshControl, Alert } from 'react-native';
+import { View, Text, ScrollView, FlatList, TouchableOpacity, TextInput, RefreshControl } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
@@ -14,6 +14,7 @@ import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
 import { withAlpha } from '../../../utils/colors';
 import { fmtAmt } from '../../../utils/fmt';
+import { showToast } from '../../../utils/toast';
 
 export function CashPositionScreen() {
   const theme = useTheme();
@@ -54,7 +55,7 @@ export function CashPositionScreen() {
     try {
       await downloadReport({ format, reportType: 'cash-position' });
     } catch (err: any) {
-      Alert.alert('Export Failed', err?.message || 'Please try again.');
+      showToast('error', 'Export Failed', err?.message || 'Please try again.');
     } finally {
       setIsExporting(false);
     }

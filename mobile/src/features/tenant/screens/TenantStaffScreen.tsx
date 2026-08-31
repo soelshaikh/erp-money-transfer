@@ -98,7 +98,7 @@ export function TenantStaffScreen({ route, navigation }: Props) {
                   )}
                 </View>
                 <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, marginTop: 2 }]}>
-                  @{item.username}
+                  {item.username}
                 </Text>
                 {item.lastLoginAt && (
                   <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>

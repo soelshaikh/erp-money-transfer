@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useLayoutEffect } from 'react';
 import { View, Text, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -10,6 +10,8 @@ import { LoadingScreen } from '../../../shared/components/LoadingScreen';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { RefreshButton } from '../../../shared/components/RefreshButton';
 import { withAlpha } from '../../../utils/colors';
 import { fmtAmt, fmtDate, fmtTime } from '../../../utils/fmt';
 
@@ -38,6 +40,7 @@ function BalancePill({ label, value, theme }: { label: string; value: number; th
 export function MyStatementScreen() {
   const { t } = useTranslation();
   const theme = useTheme();
+  const navigation = useNavigation<any>();
   const [page, setPage] = useState(1);
   const limit = 30;
   const tabBarHeight = useBottomTabBarHeight();
@@ -62,6 +65,12 @@ export function MyStatementScreen() {
     queryKey: ['my-ledger', page],
     queryFn: () => branchApi.getMyLedger({ page, limit }),
   });
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => <RefreshButton onPress={refetch} isFetching={isFetching} style={{ marginRight: 8 }} />,
+    });
+  }, [refetch, isFetching]);
 
   if (isLoading) return <LoadingScreen message={t('ledger.loading')} />;
 

@@ -2,6 +2,64 @@
 
 ---
 
+## 2026-08-31 — Session 52
+
+### Partner Fund Management System — Implemented
+
+#### Bug Fixes
+- **onHold → onHolds per-branch** (`ExternalAccount.model.ts`): Replaced global `onHold: Number` with `onHolds: Map<String, Number>`. Updated `CreateTransaction.ts`, `ApproveTransaction.ts`, `RejectTransaction.ts`, `GetExternalAccounts.ts`, `CreateExternalAccount.ts`, `GetDashboard.ts`.
+- **balanceBefore/After in Approve ledger entries (Bug 3)**: `ApproveTransaction.ts` now uses `balances[collBranchId]` for ledger entry balance snapshots instead of global `balance`.
+- **balanceBefore/After in CompletePayment payout partner entry**: `CompletePayment.ts` now uses `balances[pytBranchId]` for payout partner ledger entry instead of global `balance`.
+- **Explicit withdrawal type**: `AddExternalEntry.ts` now accepts `withdrawal` type (always debit). Branch ledger event: `partner_withdrawal`. AddEntryModal now shows a "Withdraw" button.
+- **ExternalLedger type enum**: Added `transfer_out` and `transfer_in` types.
+
+#### New Feature: Partner Transfer
+- **`PartnerTransfer.model.ts`** — new collection with status: `pending → approved → completed | rejected | cancelled`
+- **Status flow**: Branch creates → pending (onHolds.from += amount) → HO approves → approved → destination branch/HO completes → completed (balances swap, onHolds released). HO-created = immediate completed.
+- **Use cases**: `CreatePartnerTransfer`, `ApprovePartnerTransfer`, `CompletePartnerTransfer`, `CancelPartnerTransfer`, `RejectPartnerTransfer`, `GetPartnerTransfers`
+- **Routes**: `GET/POST /api/v1/partner-transfers`, `GET /:id`, `POST /:id/approve|complete|cancel|reject`
+- **Mobile**: `ExternalAccountDetailScreen` rebuilt with professional ERP layout (branch allocation table, tabs, Transfer button). New `PartnerTransferScreen` (form + live preview + confirmation). New `PartnerTransferDetailScreen` (read-only + role-based actions).
+
+---
+
+## 2026-08-30 — Session 51
+
+### UI Polish + payout_extra CompletePayment flow — implemented
+
+#### Changes
+
+**Hide global working hours from EditSettingsScreen** — entire working-hours section commented out (not deleted). Branch-wise manual management is preferred for now. Comment marks it as re-enableable.
+
+**Fix `@` double-prefix on usernames** — usernames already contain `@` (e.g., `soel@amz`). The UI was prepending an extra `@`. Fixed in 8 files: `SettingsScreen`, `LoginActivityScreen`, `StaffReportScreen`, `DaySignOffsScreen`, `TenantDetailScreen`, `TenantStaffScreen`, `DeviceApprovalsScreen`, `UserListScreen`.
+
+**Hide Timezone row from SettingsScreen** — commented out (not deleted).
+
+**BranchCodeDropdown component** (`mobile/src/shared/components/BranchCodeDropdown.tsx`) — new Modal-based searchable dropdown that shows only branch codes. Replaces chip/tile branch pickers across: `ExternalAccountDetailScreen` (AddEntry modal + assignment picker), `CreateUserScreen` (branch field). Uses same Modal overlay pattern as SearchableSelect — no layout shift.
+
+**Commission override confirm button** — "Revoke Commission Override" text was overflowing the ConfirmSheet button. Changed to use `t('common.revoke')` / `t('common.grant')` (short labels already in translation files).
+
+**Transaction list FAB + navigation** — removed the + header icon chooser modal. Branch users now go directly to ShakhaEntry via a floating action button (bottom-right, 56px circle). Token number filter input hidden in FilterPanel.
+
+**Transaction Timeline section** (`TransactionDetailScreen`) — new collapsible card with:
+- Created / Approved / Completed steps (timestamp + actor name)
+- Commission breakdown box
+- Balance impact section: lazy-loads ledger trail via `GET /transactions/:id/ledger-trail`
+- `completedAt` / `completedBy` added to `Transaction.model.ts` and populated in `completePayment()`
+- `findByTransaction()` added to `MongoBranchLedgerRepository`
+- New controller method `ledgerTrail()` + route `GET /:id/ledger-trail`
+- `branchLedgerRepository` injected into `TransactionController` via `container.ts`
+
+**payout_extra CompletePaymentScreen** — when commission side is `payout_extra` (receiver pays commission on top):
+- Always-visible amber warning shows commission amount due from receiver
+- Toggle: "Collect Extra" (pay full `amount`, collect commission separately) vs "Deduct from Pay" (pay `amount − commissionAmount`)
+- Defaults to "Collect Extra" (primary intended flow for this commission side)
+- `commissionDeducted: true` sent to backend only when mode is "Deduct from Pay"
+- Backend (`CompletePayment.ts`) uses `commissionDeducted` flag to vary ledger descriptions; ledger math is identical either way (committedPayout cleared via `finalAmount` in both cases)
+- `transactionApi.completePayment` accepts optional 3rd param `commissionDeducted`
+- `schemas.ts` accepts `commissionDeducted: Joi.boolean().optional()`
+
+---
+
 ## 2026-08-25 — Session 50
 
 ### Feature: Partner Selection for Lenar/Mokalnar (Phase B) — implemented

@@ -33,12 +33,13 @@ export default class RejectTransaction {
     // Cancel commission payable if one exists — transaction rejected, commission will never be earned
     this.commissionPayableRepository.updateStatusByTransactionId(tenantId, transactionId, 'cancelled').catch(() => {});
 
-    // Release partner on-hold if a partner was linked
+    // Release per-branch partner on-hold if a partner was linked
     const partnerCovered = transaction.partnerCoveredAmount || 0;
     if (transaction.externalAccountId && partnerCovered > 0) {
+      const collBranchId = transaction.collectionBranchId.toString();
       ExternalAccountModel.updateOne(
         { _id: transaction.externalAccountId, tenantId },
-        { $inc: { onHold: -partnerCovered } },
+        { $inc: { [`onHolds.${collBranchId}`]: -partnerCovered } },
       ).catch(() => {});
     }
 

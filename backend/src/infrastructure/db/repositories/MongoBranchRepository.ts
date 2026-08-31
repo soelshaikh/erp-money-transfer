@@ -52,4 +52,9 @@ export default class MongoBranchRepository extends IBranchRepository {
   async findHeadOfficeBranch(tenantId: string): Promise<any | null> {
     return BranchModel.findOne({ tenantId, type: 'head_office' }).lean();
   }
+
+  async hasSpecificBranch(tenantId: string): Promise<boolean> {
+    const count = await BranchModel.countDocuments({ tenantId, isSpecific: true });
+    return count > 0;
+  }
 }

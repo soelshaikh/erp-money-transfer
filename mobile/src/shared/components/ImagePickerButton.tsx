@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, Image,
   Alert, ActivityIndicator, StyleSheet,
 } from 'react-native';
+import { showToast } from '../../utils/toast';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/TenantThemeProvider';
@@ -25,14 +26,14 @@ export function ImagePickerButton({ label, value, onChange }: Props) {
       if (source === 'camera') {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
         if (!perm.granted) {
-          Alert.alert('Permission needed', 'Camera access is required to take a photo.');
+          showToast('info', 'Permission needed', 'Camera access is required to take a photo.');
           return;
         }
         result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 });
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) {
-          Alert.alert('Permission needed', 'Gallery access is required to pick a photo.');
+          showToast('info', 'Permission needed', 'Gallery access is required to pick a photo.');
           return;
         }
         result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 });
@@ -45,12 +46,12 @@ export function ImagePickerButton({ label, value, onChange }: Props) {
         const url = await uploadToCloudinary(result.assets[0].uri);
         onChange(url);
       } catch {
-        Alert.alert('Upload failed', 'Could not upload image. Please check your connection and try again.');
+        showToast('error', 'Upload failed', 'Could not upload image. Please check your connection and try again.');
       } finally {
         setUploading(false);
       }
     } catch {
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      showToast('error', 'Error', 'Something went wrong. Please try again.');
     }
   };
 

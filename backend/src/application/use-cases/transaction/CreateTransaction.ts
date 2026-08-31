@@ -87,7 +87,7 @@ export default class CreateTransaction {
     // Determine what the commission would be WITHOUT any override (needed for override audit)
     // Commission config is read from the branch that earns it: payout branch when commissionSide=payout, collection branch otherwise
     const globalCommission = tenant.settings?.commission || {};
-    const sourceBranch = (commissionSide === COMMISSION_SIDE.PAYOUT || commissionSide === COMMISSION_SIDE.PAYOUT_EXTRA) ? payoutBranch : collectionBranch;
+    const sourceBranch = commissionSide === COMMISSION_SIDE.PAYOUT ? payoutBranch : collectionBranch;
     const originalType: string = sourceBranch.commissionConfig?.enabled
       ? (sourceBranch.commissionConfig.type || COMMISSION_TYPE.FLAT)
       : (globalCommission.type || COMMISSION_TYPE.FLAT);
@@ -102,8 +102,11 @@ export default class CreateTransaction {
 
     const { commissionAmount } = Commission.calculate(amount, commissionType, commissionValue);
     // collection side: sender pays commission on top → receiver gets full amount
-    // payout side: commission cut from amount → receiver gets amount − commission
-    const finalAmount = commissionSide === COMMISSION_SIDE.PAYOUT ? amount - commissionAmount : amount;
+    // payout side: commission deducted by default → receiver gets amount − commission
+    //              (payout_extra legacy: same as payout, finalAmount = amount − commission)
+    const finalAmount = (commissionSide === COMMISSION_SIDE.PAYOUT || commissionSide === COMMISSION_SIDE.PAYOUT_EXTRA)
+      ? amount - commissionAmount
+      : amount;
 
     logger.info(
       {
@@ -154,13 +157,20 @@ export default class CreateTransaction {
       partner = await ExternalAccountModel.findOne({ _id: externalAccountId, tenantId, status: 'active' });
       if (!partner) throw new ValidationError('Partner account not found or inactive');
 
-      const availableBalance = partner.balance - partner.onHold;
+      // Use branch-specific balance so AHM credit can only cover AHM transactions
+      const branchBalance = (partner.balances as any)?.get?.(collectionBranchId)
+        ?? (partner.balances as any)?.[collectionBranchId]
+        ?? 0;
+      const branchOnHold = (partner.onHolds as any)?.get?.(collectionBranchId)
+        ?? (partner.onHolds as any)?.[collectionBranchId]
+        ?? 0;
+      const availableBalance = Math.max(0, branchBalance - branchOnHold);
       partnerCoveredAmount = Math.max(0, Math.min(amount, availableBalance));
 
-      // Lock partner balance portion for this pending transaction
+      // Lock partner balance portion for this pending transaction (per-branch)
       await ExternalAccountModel.updateOne(
         { _id: partner._id, tenantId },
-        { $inc: { onHold: partnerCoveredAmount } },
+        { $inc: { [`onHolds.${collectionBranchId}`]: partnerCoveredAmount } },
       );
 
       logger.info({ externalAccountId, availableBalance, partnerCoveredAmount }, '[TXN:UC] partner on-hold locked');
@@ -246,7 +256,7 @@ export default class CreateTransaction {
     }
 
     // If creditCommissionToSendingBranch is ON and receiver pays, track commission lifecycle from creation
-    const isPayoutSide = commissionSide === COMMISSION_SIDE.PAYOUT || commissionSide === COMMISSION_SIDE.PAYOUT_EXTRA;
+    const isPayoutSide = commissionSide === COMMISSION_SIDE.PAYOUT;
     if (isPayoutSide && commissionAmount > 0 && tenant.features?.creditCommissionToSendingBranch === true) {
       this.commissionPayableRepository.create({
         tenantId,

@@ -39,6 +39,7 @@ export const schemas: Record<string, Joi.Schema> = {
     city: Joi.string().max(100).optional(),
     state: Joi.string().max(100).optional(),
     pincode: Joi.string().length(6).pattern(/^\d+$/).optional(),
+    isSpecific: Joi.boolean().optional(),
     workingHours: Joi.object({
       enabled: Joi.boolean().required(),
       startTime: hhmm.optional().allow(null, ''),
@@ -69,7 +70,7 @@ export const schemas: Record<string, Joi.Schema> = {
 
   // User
   createUser: Joi.object({
-    username: Joi.string().alphanum().min(3).max(30).required(),
+    username: Joi.string().pattern(/^[a-z0-9@_]+$/).min(3).max(30).required(),
     password: Joi.string().min(8).max(72).required(),
     role: Joi.string().valid(...Object.values(ROLES).filter(r => r !== ROLES.SUPER_ADMIN)).required(),
     branchId: objectId.optional(),
@@ -121,6 +122,7 @@ export const schemas: Record<string, Joi.Schema> = {
 
   completePayment: Joi.object({
     payoutPhotoUrl: Joi.string().uri().optional().allow('', null),
+    commissionDeducted: Joi.boolean().optional(),
   }),
 
   // Tenant
@@ -172,7 +174,7 @@ export const schemas: Record<string, Joi.Schema> = {
   }),
 
   createHeadOfficeUser: Joi.object({
-    username: Joi.string().alphanum().min(3).max(30).required(),
+    username: Joi.string().pattern(/^[a-z0-9@_]+$/).min(3).max(30).required(),
     password: Joi.string().min(8).max(72).required(),
     name: Joi.string().min(2).max(100).required(),
   }),

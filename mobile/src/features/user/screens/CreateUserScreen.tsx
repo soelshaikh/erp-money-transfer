@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, TextInput } from 'react-native';
+import { showToast } from '../../../utils/toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../../theme/TenantThemeProvider';
 import { userApi } from '../api/userApi';
@@ -8,6 +9,7 @@ import { AppInput } from '../../../shared/components/AppInput';
 import { AppButton } from '../../../shared/components/AppButton';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
+import { BranchCodeDropdown } from '../../../shared/components/BranchCodeDropdown';
 import { LoadingScreen } from '../../../shared/components/LoadingScreen';
 import { useTranslation } from 'react-i18next';
 
@@ -52,7 +54,8 @@ export function CreateUserScreen({ navigation }: Props) {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      Alert.alert('Success', 'User created', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      showToast('success', 'User created');
+      navigation.goBack();
     },
   });
 
@@ -60,7 +63,7 @@ export function CreateUserScreen({ navigation }: Props) {
     const e: { [key: string]: string } = {};
     if (!form.name.trim()) e.name = 'Full name is required';
     if (!form.username.trim()) e.username = 'Username is required';
-    else if (!/^[a-z0-9]+$/.test(form.username.trim())) e.username = 'Username must be alphanumeric';
+    else if (!/^[a-z0-9@_]+$/.test(form.username.trim())) e.username = 'Only letters, numbers, @ and _';
     if (form.password.length < 8) e.password = 'Password must be at least 8 characters';
     if (!form.branchId) e.branchId = 'Branch is required';
     setErrors(e);
@@ -104,7 +107,7 @@ export function CreateUserScreen({ navigation }: Props) {
           ref={usernameRef}
           label="Username"
           value={form.username}
-          onChangeText={(v: string) => setForm((f) => ({ ...f, username: v.toLowerCase().replace(/[^a-z0-9]/g, '') }))}
+          onChangeText={(v: string) => setForm((f) => ({ ...f, username: v.toLowerCase().replace(/[^a-z0-9@_]/g, '') }))}
           placeholder={t('user.usernamePlaceholder')}
           error={errors.username}
           autoCapitalize="none"
@@ -144,41 +147,15 @@ export function CreateUserScreen({ navigation }: Props) {
           </View>
         </View>
 
-        <View style={{ marginBottom: theme.spacing.md }}>
-          <Text style={[theme.typography.label, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm }]}>
-            {t('user.branchLabel')}
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
-            {branchList.map((b: any) => {
-              const selected = form.branchId === b._id;
-              return (
-                <TouchableOpacity
-                  key={b._id}
-                  onPress={() => setForm((f) => ({ ...f, branchId: b._id }))}
-                  style={{
-                    paddingHorizontal: 14,
-                    paddingVertical: 9,
-                    borderRadius: theme.borderRadius.md,
-                    borderWidth: 1.5,
-                    borderColor: selected ? theme.colors.primary : theme.colors.border,
-                    backgroundColor: selected ? theme.colors.primary + '15' : theme.colors.inputBackground,
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[theme.typography.body, { color: selected ? theme.colors.primary : theme.colors.text, fontWeight: selected ? '600' : '400' }]}>
-                    {b.name}
-                  </Text>
-                  <Text style={[theme.typography.caption, { color: selected ? theme.colors.primary : theme.colors.textSecondary }]}>
-                    {b.code}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          {errors.branchId ? (
-            <Text style={[theme.typography.caption, { color: theme.colors.error, marginTop: 4 }]}>{errors.branchId}</Text>
-          ) : null}
-        </View>
+        <BranchCodeDropdown
+          label={t('user.branchLabel')}
+          branches={branchList}
+          selectedId={form.branchId || null}
+          onSelect={(id) => setForm((f) => ({ ...f, branchId: id }))}
+        />
+        {errors.branchId ? (
+          <Text style={[theme.typography.caption, { color: theme.colors.error, marginTop: -theme.spacing.xs, marginBottom: theme.spacing.sm }]}>{errors.branchId}</Text>
+        ) : null}
 
         <AppButton
           title={t('user.createBtn')}

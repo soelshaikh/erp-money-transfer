@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, FlatList, TouchableOpacity, TextInput, RefreshControl, Alert } from 'react-native';
+import { View, Text, ScrollView, FlatList, TouchableOpacity, TextInput, RefreshControl } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
 import { withAlpha } from '../../../utils/colors';
 import { fmtAmt } from '../../../utils/fmt';
+import { showToast } from '../../../utils/toast';
 
 export function BranchCollectionReportScreen() {
   const theme = useTheme();
@@ -35,7 +36,7 @@ export function BranchCollectionReportScreen() {
     try {
       await downloadReport({ format, reportType: 'branch-collection', ...activeFilters });
     } catch (err: any) {
-      Alert.alert('Export Failed', err?.message || 'Please try again.');
+      showToast('error', 'Export Failed', err?.message || 'Please try again.');
     } finally {
       setIsExporting(false);
     }

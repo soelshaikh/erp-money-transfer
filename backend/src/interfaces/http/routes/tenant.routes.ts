@@ -30,6 +30,7 @@ export default function tenantRoutes(tenantController: any) {
   router.patch('/:id/credit-commission-flag', tenantController.updateCreditCommissionFlag);
   router.patch('/:id/device-approval', tenantController.updateDeviceApproval);
   router.post('/:id/head-office', validate('createHeadOfficeUser'), tenantController.createHeadOffice);
+  router.patch('/:id/head-office/password', validate('resetPassword'), tenantController.resetHoPassword);
 
   return router;
 }

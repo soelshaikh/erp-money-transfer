@@ -26,10 +26,9 @@ export default class ExternalAccountController {
   }
 
   async list(req: any, res: any) {
-    const { tenantId } = req.user;
+    const { tenantId, branchId, role } = req.user;
     const { status } = req.query;
-    // Partners are company-wide — no branch filter
-    const result = await this.getExternalAccounts.execute({ tenantId, status });
+    const result = await this.getExternalAccounts.execute({ tenantId, status, branchId, role });
     res.status(200).json({ success: true, data: result });
   }
 
@@ -54,10 +53,10 @@ export default class ExternalAccountController {
   }
 
   async getLedger(req: any, res: any) {
-    const { tenantId } = req.user;
+    const { tenantId, role, branchId } = req.user;
     const { id: accountId } = req.params;
     const { fromDate, toDate, limit } = req.query;
-    const result = await this.getExternalLedger.execute({ tenantId, accountId, fromDate, toDate, limit: limit ? parseInt(limit) : 200 });
+    const result = await this.getExternalLedger.execute({ tenantId, accountId, fromDate, toDate, limit: limit ? parseInt(limit) : 200, role, branchId });
     res.status(200).json({ success: true, data: result });
   }
 }

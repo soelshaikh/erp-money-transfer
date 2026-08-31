@@ -9,11 +9,12 @@ const externalAccountSchema = new mongoose.Schema({
   phone:         { type: String, trim: true, default: null },
   address:       { type: String, trim: true, default: null },
   notes:         { type: String, trim: true, default: null },
-  // positive = they have credit with us (we owe them)
-  // negative = they owe us (due outstanding)
+  // total balance across all branches (sum of balances map)
   balance:       { type: Number, default: 0 },
-  // amount locked by pending-approval transactions
-  onHold:        { type: Number, default: 0 },
+  // per-branch balance: { branchId: amount }
+  balances:      { type: Map, of: Number, default: {} },
+  // per-branch holds: amount locked by pending-approval transactions or pending partner transfers
+  onHolds:       { type: Map, of: Number, default: {} },
   status:        { type: String, enum: ['active', 'inactive'], default: 'active' },
   createdBy:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 }, {

@@ -1,5 +1,7 @@
-import React from 'react';
-import { View, Text, ScrollView, Alert, RefreshControl, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, RefreshControl, Platform } from 'react-native';
+import { showToast } from '../../../utils/toast';
+import { ConfirmSheet } from '../../../shared/components/ConfirmSheet';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
@@ -97,6 +99,11 @@ export function HQCommissionSettlementDetailScreen({ route, navigation }: Props)
   const user = useAuthStore((s: any) => s.user);
   const isHO = user?.role === 'head_office';
 
+  const [confirmSheet, setConfirmSheet] = useState<{
+    title: string; message?: string; confirmLabel?: string;
+    destructive?: boolean; icon?: string; onConfirm: () => void;
+  } | null>(null);
+
   const { data: settlement, isLoading, isFetching, refetch } = useQuery<HQCommissionSettlementWithItems>({
     queryKey: ['hqCommissionSettlement', settlementId],
     queryFn: () => hqCommissionApi.getSettlement(settlementId),
@@ -111,21 +118,19 @@ export function HQCommissionSettlementDetailScreen({ route, navigation }: Props)
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['branchLedger'] });
     },
-    onError: (e: any) => Alert.alert('Error', parseApiError(e) ?? 'Failed to complete settlement'),
+    onError: (e: any) => showToast('error', 'Error', parseApiError(e) ?? 'Failed to complete settlement'),
   });
 
   const handleComplete = () => {
     if (!settlement) return;
-    Alert.alert(
-      t('hqComm.markReceived'),
-      t('hqComm.markReceivedConfirm')
+    setConfirmSheet({
+      title: t('hqComm.markReceived'),
+      message: t('hqComm.markReceivedConfirm')
         .replace('{branch}', settlement.branchName)
         .replace('{amount}', fmtAmt(settlement.totalHQShare)),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('hqComm.markReceived'), onPress: () => completeMutation.mutate() },
-      ],
-    );
+      confirmLabel: t('hqComm.markReceived'),
+      onConfirm: () => completeMutation.mutate(),
+    });
   };
 
   if (isLoading) return <LoadingScreen message={t('hqComm.loading')} />;
@@ -140,6 +145,7 @@ export function HQCommissionSettlementDetailScreen({ route, navigation }: Props)
   const canComplete = isPending && isHO;
 
   return (
+    <>
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.colors.background }}
       contentContainerStyle={{ padding: theme.spacing.md, paddingBottom: 40 }}
@@ -276,5 +282,16 @@ export function HQCommissionSettlementDetailScreen({ route, navigation }: Props)
         </AppCard>
       )}
     </ScrollView>
+    <ConfirmSheet
+      visible={!!confirmSheet}
+      title={confirmSheet?.title ?? ''}
+      message={confirmSheet?.message}
+      confirmLabel={confirmSheet?.confirmLabel}
+      destructive={confirmSheet?.destructive}
+      icon={confirmSheet?.icon}
+      onConfirm={() => { confirmSheet?.onConfirm(); setConfirmSheet(null); }}
+      onClose={() => setConfirmSheet(null)}
+    />
+    </>
   );
 }

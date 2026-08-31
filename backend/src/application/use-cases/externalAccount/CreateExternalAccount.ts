@@ -20,7 +20,6 @@ export default class CreateExternalAccount {
       address: address?.trim() || null,
       notes: notes?.trim() || null,
       balance: 0,
-      onHold: 0,
       status: 'active',
       createdBy,
     });

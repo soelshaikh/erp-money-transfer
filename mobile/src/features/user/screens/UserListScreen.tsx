@@ -1,14 +1,16 @@
 import React, { useState, useLayoutEffect } from 'react';
 import {
   View, Text, FlatList, RefreshControl, TouchableOpacity,
-  Alert, Modal, ScrollView, ActivityIndicator,
+  Modal, ScrollView, ActivityIndicator,
 } from 'react-native';
+import { showToast } from '../../../utils/toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useTheme } from '../../../theme/TenantThemeProvider';
 import { Ionicons } from '@expo/vector-icons';
 import { withAlpha } from '../../../utils/colors';
+import { RefreshButton } from '../../../shared/components/RefreshButton';
 import { fmtAmt } from '../../../utils/fmt';
 import { userApi } from '../api/userApi';
 import { AppCard } from '../../../shared/components/AppCard';
@@ -17,6 +19,7 @@ import { EmptyState } from '../../../shared/components/EmptyState';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { parseApiError } from '../../../utils/apiError';
 import { useTranslation } from 'react-i18next';
+import { ConfirmSheet } from '../../../shared/components/ConfirmSheet';
 
 function getStatusBadge(status: string, theme: any, t: (key: string) => string) {
   if (status === 'active') return { bg: withAlpha(theme.colors.success, 0.12), color: theme.colors.success, label: t('common.active') };
@@ -67,7 +70,7 @@ function UserItem({ item, theme, onToggle, onSuspend, onUnsuspend, onManageDevic
             {item.name}
           </Text>
           <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>
-            @{item.username} · {item.role === 'head_office' ? t('user.headOffice') : item.role === 'branch' ? t('user.branch') : item.role === 'super_admin' ? t('user.superAdmin') : item.role}
+            {item.username} · {item.role === 'head_office' ? t('user.headOffice') : item.role === 'branch' ? t('user.branch') : item.role === 'super_admin' ? t('user.superAdmin') : item.role}
           </Text>
           {item.role === 'branch' && item.branchId?.code && (
             <Text style={[theme.typography.caption, { color: theme.colors.primary, fontWeight: '600', marginTop: 1 }]} numberOfLines={1}>
@@ -171,17 +174,25 @@ export function UserListScreen() {
   const [suspendModal, setSuspendModal] = useState<{ user: any; transactions: any[] } | null>(null);
   const [disableModal, setDisableModal] = useState<{ user: any; transactions: any[] } | null>(null);
   const [disablingId, setDisablingId] = useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    title: string;
+    message?: string;
+    confirmLabel?: string;
+    destructive?: boolean;
+    icon?: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const toggleMutation = useMutation({
     mutationFn: (id: string) => userApi.toggleStatus(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
-    onError: (err: any) => Alert.alert('Error', parseApiError(err) ?? 'Failed to update status'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); showToast('success', 'Updated', 'User status updated'); },
+    onError: (err: any) => showToast('error', 'Error', parseApiError(err) ?? 'Failed to update status'),
   });
 
   const toggleDisableMutation = useMutation({
     mutationFn: (id: string) => userApi.toggleStatus(id),
-    onSuccess: () => { setDisableModal(null); qc.invalidateQueries({ queryKey: ['users'] }); },
-    onError: (err: any) => Alert.alert('Error', parseApiError(err) ?? 'Failed to update status'),
+    onSuccess: () => { setDisableModal(null); qc.invalidateQueries({ queryKey: ['users'] }); showToast('success', 'Updated', 'User status updated'); },
+    onError: (err: any) => showToast('error', 'Error', parseApiError(err) ?? 'Failed to update status'),
   });
 
   const suspendMutation = useMutation({
@@ -189,10 +200,11 @@ export function UserListScreen() {
     onSuccess: () => {
       setSuspendModal(null);
       qc.invalidateQueries({ queryKey: ['users'] });
+      showToast('success', 'Suspended', 'User suspended');
     },
     onError: (err: any) => {
       setSuspendModal(null);
-      Alert.alert('Error', parseApiError(err) ?? 'Failed to suspend user');
+      showToast('error', 'Error', parseApiError(err) ?? 'Failed to suspend user');
     },
   });
 
@@ -200,25 +212,27 @@ export function UserListScreen() {
     mutationFn: (id: string) => userApi.unsuspend(id),
     onMutate: (id) => setUnsuspendingId(id),
     onSettled: () => setUnsuspendingId(null),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
-    onError: (err: any) => Alert.alert('Error', parseApiError(err) ?? 'Failed to unsuspend user'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); showToast('success', 'Updated', 'User unsuspended'); },
+    onError: (err: any) => showToast('error', 'Error', parseApiError(err) ?? 'Failed to unsuspend user'),
   });
 
   const commissionPermMutation = useMutation({
     mutationFn: ({ id, canOverride }: { id: string; canOverride: boolean }) =>
       userApi.update(id, { permissions: { canOverrideCommission: canOverride } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
-    onError: (err: any) => Alert.alert('Error', parseApiError(err) ?? 'Failed to update permission'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); showToast('success', 'Updated', 'Permission updated'); },
+    onError: (err: any) => showToast('error', 'Error', parseApiError(err) ?? 'Failed to update permission'),
   });
 
   const handleToggle = (item: any) => {
     const isActive = item.status === 'active';
     if (!isActive) {
       // enabling — simple confirm
-      Alert.alert(t('user.enableTitle'), `"${item.name}" ${t('user.enableMsg')}`, [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('user.enableBtn'), onPress: () => toggleMutation.mutate(item._id) },
-      ]);
+      setConfirmSheet({
+        title: t('user.enableTitle'),
+        message: `"${item.name}" ${t('user.enableMsg')}`,
+        confirmLabel: t('user.enableBtn'),
+        onConfirm: () => toggleMutation.mutate(item._id),
+      });
       return;
     }
     // disabling — fetch transactions first, show modal
@@ -242,14 +256,12 @@ export function UserListScreen() {
   };
 
   const handleUnsuspend = (item: any) => {
-    Alert.alert(
-      t('user.unsuspendTitle'),
-      `"${item.name}" ${t('user.unsuspendMsg')}`,
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('user.unsuspendBtn'), onPress: () => unsuspendMutation.mutate(item._id) },
-      ]
-    );
+    setConfirmSheet({
+      title: t('user.unsuspendTitle'),
+      message: `"${item.name}" ${t('user.unsuspendMsg')}`,
+      confirmLabel: t('user.unsuspendBtn'),
+      onConfirm: () => unsuspendMutation.mutate(item._id),
+    });
   };
 
   const handleManageDevices = (item: any) => {
@@ -258,20 +270,15 @@ export function UserListScreen() {
 
   const handleToggleCommissionPermission = (item: any) => {
     const current = item.permissions?.canOverrideCommission === true;
-    Alert.alert(
-      current ? t('user.revokeCommTitle') : t('user.grantCommTitle'),
-      current
+    setConfirmSheet({
+      title: current ? t('user.revokeCommTitle') : t('user.grantCommTitle'),
+      message: current
         ? `"${item.name}"${t('user.revokeCommMsg')}`
         : `Allow "${item.name}" ${t('user.grantCommMsg')}`,
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: current ? t('user.revokeCommTitle') : t('user.grantCommTitle'),
-          style: current ? 'destructive' : 'default',
-          onPress: () => commissionPermMutation.mutate({ id: item._id, canOverride: !current }),
-        },
-      ]
-    );
+      confirmLabel: current ? t('common.revoke') : t('common.grant'),
+      destructive: current,
+      onConfirm: () => commissionPermMutation.mutate({ id: item._id, canOverride: !current }),
+    });
   };
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
@@ -288,6 +295,7 @@ export function UserListScreen() {
     navigation.setOptions({
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: theme.spacing.sm }}>
+          <RefreshButton onPress={refetch} isFetching={isFetching} />
           <TouchableOpacity
             onPress={() => navigation.navigate('DeviceApprovals')}
             style={{ padding: 4 }}
@@ -297,7 +305,7 @@ export function UserListScreen() {
           <TouchableOpacity
             onPress={() => {
               if (atLimit) {
-                Alert.alert(t('user.staffLimitTitle'), `${t('user.staffLimitMsg')} ${staffLimit} staff member${staffLimit === 1 ? '' : 's'}.`);
+                showToast('info', t('user.staffLimitTitle'), `${t('user.staffLimitMsg')} ${staffLimit} staff member${staffLimit === 1 ? '' : 's'}.`);
                 return;
               }
               navigation.navigate('CreateUser');
@@ -309,7 +317,7 @@ export function UserListScreen() {
         </View>
       ),
     });
-  }, [navigation, theme, atLimit, staffLimit]);
+  }, [navigation, theme, atLimit, staffLimit, refetch, isFetching]);
 
   if (isLoading) return <LoadingScreen message={t('user.loading')} />;
 
@@ -476,6 +484,17 @@ export function UserListScreen() {
           </View>
         </View>
       </Modal>
+
+      <ConfirmSheet
+        visible={!!confirmSheet}
+        title={confirmSheet?.title ?? ''}
+        message={confirmSheet?.message}
+        confirmLabel={confirmSheet?.confirmLabel}
+        destructive={confirmSheet?.destructive}
+        icon={confirmSheet?.icon}
+        onConfirm={() => { confirmSheet?.onConfirm(); setConfirmSheet(null); }}
+        onClose={() => setConfirmSheet(null)}
+      />
 
       {/* Disable confirmation modal */}
       <Modal

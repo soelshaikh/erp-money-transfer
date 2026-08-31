@@ -29,6 +29,7 @@ const branchSchema = new mongoose.Schema({
     startTime: { type: String, default: null }, // HH:MM IST; null = inherit from company
     endTime:   { type: String, default: null },
   },
+  isSpecific: { type: Boolean, default: false },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 }, {
   timestamps: true,
