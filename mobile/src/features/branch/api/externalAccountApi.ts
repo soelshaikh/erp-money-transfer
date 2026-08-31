@@ -24,7 +24,15 @@ export const partnerTransferApi = {
   getOne: (id: string) =>
     apiClient.get(`/partner-transfers/${id}`).then((r) => r.data.data),
 
-  create: (body: { externalAccountId: string; fromBranchId: string; toBranchId: string; amount: number; remarks?: string }) =>
+  create: (body: {
+    externalAccountId: string; fromBranchId: string; toBranchId: string; amount: number;
+    remarks?: string;
+    senderName?: string; senderMobile?: string;
+    receiverName?: string; receiverMobile?: string;
+    customerTokenNo?: string;
+    commissionSide?: string; commissionType?: string; commissionValue?: number;
+    paymentMethod?: string;
+  }) =>
     apiClient.post('/partner-transfers', body).then((r) => r.data.data),
 
   approve: (id: string) =>

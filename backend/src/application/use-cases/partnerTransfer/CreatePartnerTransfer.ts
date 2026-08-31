@@ -12,15 +12,27 @@ async function generateRef(tenantId: string): Promise<string> {
   return `${prefix}${String(count + 1).padStart(5, '0')}`;
 }
 
+function calcCommission(side: string, type: string, value: number, amount: number): number {
+  if (side === 'none' || value <= 0) return 0;
+  return type === 'percentage' ? Math.round(amount * value / 100) : value;
+}
+
 export default class CreatePartnerTransfer {
   branchRepository: any;
+  branchLedgerRepository: any;
 
   constructor(deps: any) {
     this.branchRepository = deps.branchRepository;
+    this.branchLedgerRepository = deps.branchLedgerRepository;
   }
 
   async execute(params: any): Promise<any> {
-    const { tenantId, externalAccountId, fromBranchId, toBranchId, amount, remarks, senderName, senderMobile, receiverName, receiverMobile, createdBy, createdByName, createdByRole } = params;
+    const {
+      tenantId, externalAccountId, fromBranchId, toBranchId, amount, remarks,
+      senderName, senderMobile, receiverName, receiverMobile, customerTokenNo,
+      commissionSide, commissionType, commissionValue, paymentMethod,
+      createdBy, createdByName, createdByRole,
+    } = params;
 
     if (!amount || amount <= 0) throw new ValidationError('Amount must be greater than zero');
     if (fromBranchId.toString() === toBranchId.toString()) throw new ValidationError('Source and destination branches must be different');
@@ -38,109 +50,141 @@ export default class CreatePartnerTransfer {
     const fromBranchIdStr = fromBranchId.toString();
     const toBranchIdStr = toBranchId.toString();
 
-    // HO-created: immediate completion, no approval needed
+    // Commission
+    const effSide = commissionSide || 'none';
+    const effType = commissionType || 'flat';
+    const effValue = commissionValue || 0;
+    const commissionAmount = calcCommission(effSide, effType, effValue, amount);
+
+    // finalAmount = what TO branch's partner balance receives
+    // 'payout' (Receiver Pays): FROM keeps difference, TO gets less
+    // all others: TO gets full amount
+    const finalAmount = effSide === 'payout' ? Math.max(0, amount - commissionAmount) : amount;
+
+    // Partner balance at FROM — never block, allow negatives and overdraft
+    const fromBal = (partner.balances as any)?.get?.(fromBranchIdStr) ?? (partner.balances as any)?.[fromBranchIdStr] ?? 0;
+    const fromOnHold = (partner.onHolds as any)?.get?.(fromBranchIdStr) ?? (partner.onHolds as any)?.[fromBranchIdStr] ?? 0;
+    const partnerAvailable = Math.max(0, fromBal - fromOnHold);
+    const partnerCoversAmount = Math.min(amount, partnerAvailable);
+    const branchCoversAmount = amount - partnerCoversAmount;
+    const toBal = (partner.balances as any)?.get?.(toBranchIdStr) ?? (partner.balances as any)?.[toBranchIdStr] ?? 0;
+
+    const transferRef = await generateRef(tenantId);
+    const today = todayIST();
+
+    const baseDoc: any = {
+      tenantId, externalAccountId, fromBranchId, toBranchId,
+      amount, finalAmount, partnerCoversAmount, branchCoversAmount,
+      commissionSide: effSide, commissionType: effType,
+      commissionValue: effValue, commissionAmount,
+      paymentMethod: paymentMethod || 'cash',
+      senderName: senderName?.trim() || null,
+      senderMobile: senderMobile?.trim() || null,
+      receiverName: receiverName?.trim() || null,
+      receiverMobile: receiverMobile?.trim() || null,
+      customerTokenNo: customerTokenNo?.trim() || null,
+      remarks: remarks?.trim() || null,
+      createdByRole: createdByRole === 'head_office' ? 'head_office' : 'branch',
+      transferRef, createdBy, createdByName: createdByName || null,
+    };
+
+    // HO-created: immediate completion
     if (createdByRole === 'head_office') {
-      const branchBal = (partner.balances as any)?.get?.(fromBranchIdStr) ?? (partner.balances as any)?.[fromBranchIdStr] ?? 0;
-      const branchOnHold = (partner.onHolds as any)?.get?.(fromBranchIdStr) ?? (partner.onHolds as any)?.[fromBranchIdStr] ?? 0;
-      const available = Math.max(0, branchBal - branchOnHold);
-      if (amount > available) {
-        throw new ValidationError(`Insufficient available balance at source branch. Available: ${available}`);
-      }
-
-      const transferRef = await generateRef(tenantId);
-      const today = todayIST();
-
-      // Compute branch-specific balances before for ledger entries
-      const fromBalBefore = (partner.balances as any)?.get?.(fromBranchIdStr) ?? (partner.balances as any)?.[fromBranchIdStr] ?? 0;
-      const toBalBefore = (partner.balances as any)?.get?.(toBranchIdStr) ?? (partner.balances as any)?.[toBranchIdStr] ?? 0;
-
       const transfer = await PartnerTransferModel.create({
-        tenantId,
-        externalAccountId,
-        fromBranchId,
-        toBranchId,
-        amount,
+        ...baseDoc,
         status: 'completed',
-        remarks: remarks?.trim() || null,
-        createdByRole: 'head_office',
-        transferRef,
-        createdBy,
-        createdByName: createdByName || null,
-        approvedBy: createdBy,
-        approvedByName: createdByName || null,
-        completedBy: createdBy,
-        completedByName: createdByName || null,
-        approvedAt: new Date(),
-        completedAt: new Date(),
+        approvedBy: createdBy, approvedByName: createdByName || null,
+        completedBy: createdBy, completedByName: createdByName || null,
+        approvedAt: new Date(), completedAt: new Date(),
       });
 
       await Promise.all([
         ExternalLedgerModel.create({
-          tenantId,
-          externalAccountId,
-          branchId: fromBranchId,
-          type: 'transfer_out',
-          direction: 'debit',
-          amount,
-          balanceBefore: fromBalBefore,
-          balanceAfter: fromBalBefore - amount,
+          tenantId, externalAccountId: partner._id, branchId: fromBranchId,
+          type: 'transfer_out', direction: 'debit', amount,
+          balanceBefore: fromBal, balanceAfter: fromBal - amount,
           description: `Transfer to ${toBranch.name} — ${transferRef}`,
-          entryDate: today,
-          createdBy,
-          createdByName: createdByName || null,
+          entryDate: today, createdBy, createdByName: createdByName || null,
         }),
         ExternalLedgerModel.create({
-          tenantId,
-          externalAccountId,
-          branchId: toBranchId,
-          type: 'transfer_in',
-          direction: 'credit',
-          amount,
-          balanceBefore: toBalBefore,
-          balanceAfter: toBalBefore + amount,
+          tenantId, externalAccountId: partner._id, branchId: toBranchId,
+          type: 'transfer_in', direction: 'credit', amount: finalAmount,
+          balanceBefore: toBal, balanceAfter: toBal + finalAmount,
           description: `Transfer from ${fromBranch.name} — ${transferRef}`,
-          entryDate: today,
-          createdBy,
-          createdByName: createdByName || null,
+          entryDate: today, createdBy, createdByName: createdByName || null,
         }),
         ExternalAccountModel.updateOne(
           { _id: partner._id, tenantId },
-          { $inc: { [`balances.${fromBranchIdStr}`]: -amount, [`balances.${toBranchIdStr}`]: amount } },
+          { $inc: { [`balances.${fromBranchIdStr}`]: -amount, [`balances.${toBranchIdStr}`]: finalAmount } },
         ),
       ]);
+
+      // Branch shortfall: FROM branch cash covers the gap (payout_completed with no prior committed)
+      if (branchCoversAmount > 0) {
+        await this.branchLedgerRepository.addEntry(tenantId, fromBranchId, {
+          transactionId: null, type: 'debit', amount: branchCoversAmount,
+          description: `Partner transfer branch coverage — ${transferRef}`,
+          event: 'payout_completed', tokenNumber: null, committedPayoutAmount: 0,
+        });
+      }
+
+      // Commission at completion (HO immediate)
+      if (commissionAmount > 0) {
+        if (effSide === 'collection') {
+          // Sender pays: FROM branch earns commission
+          await this.branchLedgerRepository.addEntry(tenantId, fromBranchId, {
+            transactionId: null, type: 'credit', amount: commissionAmount,
+            description: `Partner transfer commission — ${transferRef}`,
+            event: 'partner_commission', tokenNumber: null,
+          });
+        } else if (effSide === 'payout') {
+          // Receiver pays: FROM branch keeps the difference
+          await this.branchLedgerRepository.addEntry(tenantId, fromBranchId, {
+            transactionId: null, type: 'credit', amount: commissionAmount,
+            description: `Partner transfer commission — ${transferRef}`,
+            event: 'partner_commission', tokenNumber: null,
+          });
+        } else if (effSide === 'payout_extra') {
+          // Receiver extra: TO branch earns commission
+          await this.branchLedgerRepository.addEntry(tenantId, toBranchId, {
+            transactionId: null, type: 'credit', amount: commissionAmount,
+            description: `Partner transfer commission — ${transferRef}`,
+            event: 'partner_commission', tokenNumber: null,
+          });
+        }
+      }
 
       return transfer;
     }
 
-    // Branch-created: pending + lock onHold
-    const branchBal = (partner.balances as any)?.get?.(fromBranchIdStr) ?? (partner.balances as any)?.[fromBranchIdStr] ?? 0;
-    const branchOnHold = (partner.onHolds as any)?.get?.(fromBranchIdStr) ?? (partner.onHolds as any)?.[fromBranchIdStr] ?? 0;
-    const available = Math.max(0, branchBal - branchOnHold);
-    if (amount > available) {
-      throw new ValidationError(`Insufficient available balance at source branch. Available: ${available}`);
+    // Branch-created: pending + lock onHold for whatever partner can cover
+    const [transfer] = await Promise.all([
+      PartnerTransferModel.create({ ...baseDoc, status: 'pending' }),
+      partnerCoversAmount > 0
+        ? ExternalAccountModel.updateOne(
+            { _id: partner._id, tenantId },
+            { $inc: { [`onHolds.${fromBranchIdStr}`]: partnerCoversAmount } },
+          )
+        : Promise.resolve(),
+    ]);
+
+    // Branch shortfall: put branch cash on hold
+    if (branchCoversAmount > 0) {
+      await this.branchLedgerRepository.addEntry(tenantId, fromBranchId, {
+        transactionId: null, type: 'committed_debit', amount: branchCoversAmount,
+        description: `Partner transfer committed — ${transferRef}`,
+        event: 'payout_committed', tokenNumber: null,
+      });
     }
 
-    const transferRef = await generateRef(tenantId);
-
-    const [transfer] = await Promise.all([
-      PartnerTransferModel.create({
-        tenantId,
-        externalAccountId,
-        fromBranchId,
-        toBranchId,
-        amount,
-        status: 'pending',
-        remarks: remarks?.trim() || null,
-        createdByRole: 'branch',
-        transferRef,
-        createdBy,
-        createdByName: createdByName || null,
-      }),
-      ExternalAccountModel.updateOne(
-        { _id: partner._id, tenantId },
-        { $inc: { [`onHolds.${fromBranchIdStr}`]: amount } },
-      ),
-    ]);
+    // Sender pays: credit commission to FROM branch at create time
+    if (effSide === 'collection' && commissionAmount > 0) {
+      await this.branchLedgerRepository.addEntry(tenantId, fromBranchId, {
+        transactionId: null, type: 'credit', amount: commissionAmount,
+        description: `Partner transfer commission — ${transferRef}`,
+        event: 'partner_commission', tokenNumber: null,
+      });
+    }
 
     return transfer;
   }

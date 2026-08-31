@@ -22,6 +22,7 @@ const branchLedgerSchema = new mongoose.Schema({
       'commission_settlement_out', 'commission_settlement_in',
       'hq_commission_out', 'hq_commission_in',
       'partner_deposit', 'partner_due', 'partner_withdrawal',
+      'payout_committed_reversed', 'partner_commission', 'partner_commission_reversal',
     ],
     required: true,
   },

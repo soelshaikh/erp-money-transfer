@@ -6,9 +6,11 @@ import { todayIST } from '../../../utils/dateIST';
 
 export default class CompletePartnerTransfer {
   branchRepository: any;
+  branchLedgerRepository: any;
 
   constructor(deps: any) {
     this.branchRepository = deps.branchRepository;
+    this.branchLedgerRepository = deps.branchLedgerRepository;
   }
 
   async execute(params: any): Promise<any> {
@@ -18,7 +20,6 @@ export default class CompletePartnerTransfer {
     if (!transfer) throw new NotFoundError('Partner transfer not found');
     if (transfer.status !== 'approved') throw new ConflictError(`Transfer cannot be completed — current status: ${transfer.status}`);
 
-    // Only destination branch or HO can complete
     if (role === 'branch' && userBranchId && transfer.toBranchId.toString() !== userBranchId.toString()) {
       throw new BusinessRuleError('Only the destination branch can complete this transfer');
     }
@@ -35,51 +36,69 @@ export default class CompletePartnerTransfer {
       this.branchRepository.findById(tenantId, toBranchIdStr),
     ]);
 
-    // Branch-specific balances before
     const fromBalBefore = (partner.balances as any)?.get?.(fromBranchIdStr) ?? (partner.balances as any)?.[fromBranchIdStr] ?? 0;
     const toBalBefore = (partner.balances as any)?.get?.(toBranchIdStr) ?? (partner.balances as any)?.[toBranchIdStr] ?? 0;
 
-    // Atomic: move balances, release onHold, create 2 ledger entries, mark completed
+    const finalAmount = (transfer as any).finalAmount ?? transfer.amount;
+    const partnerCoversAmount = (transfer as any).partnerCoversAmount ?? transfer.amount;
+    const branchCoversAmount = (transfer as any).branchCoversAmount ?? 0;
+    const commissionSide = (transfer as any).commissionSide ?? 'none';
+    const commissionAmount = (transfer as any).commissionAmount ?? 0;
+
     await Promise.all([
       ExternalLedgerModel.create({
-        tenantId,
-        externalAccountId: transfer.externalAccountId,
-        branchId: transfer.fromBranchId,
-        type: 'transfer_out',
-        direction: 'debit',
-        amount: transfer.amount,
-        balanceBefore: fromBalBefore,
-        balanceAfter: fromBalBefore - transfer.amount,
+        tenantId, externalAccountId: transfer.externalAccountId, branchId: transfer.fromBranchId,
+        type: 'transfer_out', direction: 'debit', amount: transfer.amount,
+        balanceBefore: fromBalBefore, balanceAfter: fromBalBefore - transfer.amount,
         description: `Transfer to ${toBranch?.name || toBranchIdStr} — ${transfer.transferRef}`,
-        entryDate: today,
-        createdBy: userId,
-        createdByName: userName || null,
+        entryDate: today, createdBy: userId, createdByName: userName || null,
       }),
       ExternalLedgerModel.create({
-        tenantId,
-        externalAccountId: transfer.externalAccountId,
-        branchId: transfer.toBranchId,
-        type: 'transfer_in',
-        direction: 'credit',
-        amount: transfer.amount,
-        balanceBefore: toBalBefore,
-        balanceAfter: toBalBefore + transfer.amount,
+        tenantId, externalAccountId: transfer.externalAccountId, branchId: transfer.toBranchId,
+        type: 'transfer_in', direction: 'credit', amount: finalAmount,
+        balanceBefore: toBalBefore, balanceAfter: toBalBefore + finalAmount,
         description: `Transfer from ${fromBranch?.name || fromBranchIdStr} — ${transfer.transferRef}`,
-        entryDate: today,
-        createdBy: userId,
-        createdByName: userName || null,
+        entryDate: today, createdBy: userId, createdByName: userName || null,
       }),
       ExternalAccountModel.updateOne(
         { _id: partner._id, tenantId },
         {
           $inc: {
             [`balances.${fromBranchIdStr}`]: -transfer.amount,
-            [`balances.${toBranchIdStr}`]: transfer.amount,
-            [`onHolds.${fromBranchIdStr}`]: -transfer.amount,
+            [`balances.${toBranchIdStr}`]: finalAmount,
+            [`onHolds.${fromBranchIdStr}`]: -partnerCoversAmount,
           },
         },
       ),
     ]);
+
+    // Branch covered the shortfall: debit branch balance, clear committed amount
+    if (branchCoversAmount > 0) {
+      await this.branchLedgerRepository.addEntry(tenantId, transfer.fromBranchId, {
+        transactionId: null, type: 'debit', amount: branchCoversAmount,
+        description: `Partner transfer branch coverage — ${transfer.transferRef}`,
+        event: 'payout_completed', tokenNumber: null, committedPayoutAmount: branchCoversAmount,
+      });
+    }
+
+    // Commission at completion
+    if (commissionAmount > 0) {
+      if (commissionSide === 'payout') {
+        // Receiver pays: FROM branch (AHM) keeps the difference
+        await this.branchLedgerRepository.addEntry(tenantId, transfer.fromBranchId, {
+          transactionId: null, type: 'credit', amount: commissionAmount,
+          description: `Partner transfer commission — ${transfer.transferRef}`,
+          event: 'partner_commission', tokenNumber: null,
+        });
+      } else if (commissionSide === 'payout_extra') {
+        // Receiver extra: TO branch (MUM) earns commission from Lenar
+        await this.branchLedgerRepository.addEntry(tenantId, transfer.toBranchId, {
+          transactionId: null, type: 'credit', amount: commissionAmount,
+          description: `Partner transfer commission — ${transfer.transferRef}`,
+          event: 'partner_commission', tokenNumber: null,
+        });
+      }
+    }
 
     transfer.status = 'completed';
     transfer.completedBy = userId;

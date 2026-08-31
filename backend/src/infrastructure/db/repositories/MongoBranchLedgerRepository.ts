@@ -69,6 +69,12 @@ function buildIncrement(event: string, amount: number, committedPayoutOverride?:
       return { balance: -amount };
     case 'partner_withdrawal':
       return { balance: -amount };
+    case 'payout_committed_reversed':
+      return { committedPayout: -amount };
+    case 'partner_commission':
+      return { balance: amount };
+    case 'partner_commission_reversal':
+      return { balance: -amount };
     default:
       return {};
   }

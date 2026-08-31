@@ -167,14 +167,56 @@ export function PartnerTransferDetailScreen() {
           <View style={{ flex: 1, alignItems: 'center' }}>
             <Text style={{ fontSize: 18, fontWeight: '800', color: theme.colors.success }} allowFontScaling={false}>{to?.code || '?'}</Text>
             <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, textAlign: 'center' }]}>{to?.name || '—'}</Text>
-            <Text style={{ fontSize: 11, color: theme.colors.success, fontWeight: '600' }}>+ {fmtAmt(transfer.amount)}</Text>
+            <Text style={{ fontSize: 11, color: theme.colors.success, fontWeight: '600' }}>+ {fmtAmt(transfer.finalAmount ?? transfer.amount)}</Text>
           </View>
         </View>
+
+        {/* Commission summary */}
+        {transfer.commissionSide && transfer.commissionSide !== 'none' && (transfer.commissionAmount ?? 0) > 0 && (
+          <View style={{ marginTop: theme.spacing.sm, backgroundColor: withAlpha(theme.colors.warning, 0.07), borderRadius: theme.borderRadius.sm, padding: theme.spacing.sm, gap: 4 }}>
+            <InfoRow label="Commission" value={fmtAmt(transfer.commissionAmount)} theme={theme} color={theme.colors.warning} />
+            <InfoRow label="Commission on"
+              value={transfer.commissionSide === 'collection' ? 'Sender Pays' : transfer.commissionSide === 'payout' ? 'Receiver Pays' : 'Receiver Pays Extra'}
+              theme={theme} />
+            {transfer.commissionType === 'percentage'
+              ? <InfoRow label="Rate" value={`${transfer.commissionValue}%`} theme={theme} />
+              : <InfoRow label="Flat amount" value={fmtAmt(transfer.commissionValue)} theme={theme} />
+            }
+            {(transfer.finalAmount ?? 0) !== transfer.amount && (
+              <InfoRow label="Amount to Lenar" value={fmtAmt(transfer.finalAmount)} theme={theme} color={theme.colors.success} />
+            )}
+          </View>
+        )}
+
+        {/* Payment & coverage */}
+        {((transfer.branchCoversAmount ?? 0) > 0 || (transfer.partnerCoversAmount ?? 0) < transfer.amount) && (
+          <View style={{ marginTop: theme.spacing.sm, backgroundColor: withAlpha(theme.colors.warning, 0.06), borderRadius: theme.borderRadius.sm, padding: theme.spacing.sm, gap: 4 }}>
+            <InfoRow label="Partner covers" value={fmtAmt(transfer.partnerCoversAmount ?? transfer.amount)} theme={theme} />
+            {(transfer.branchCoversAmount ?? 0) > 0 && (
+              <InfoRow label="Branch covers" value={fmtAmt(transfer.branchCoversAmount)} theme={theme} color={theme.colors.warning} />
+            )}
+          </View>
+        )}
+
+        {transfer.paymentMethod && transfer.paymentMethod !== 'cash' && (
+          <InfoRow label="Payment Method" value={(transfer.paymentMethod as string).toUpperCase()} theme={theme} />
+        )}
 
         {transfer.remarks && (
           <Text style={[theme.typography.caption, { color: theme.colors.textSecondary, fontStyle: 'italic', marginTop: theme.spacing.sm }]}>"{transfer.remarks}"</Text>
         )}
       </SectionCard>
+
+      {/* People info */}
+      {(transfer.senderName || transfer.receiverName || transfer.customerTokenNo) && (
+        <SectionCard title="SENDER / RECEIVER" theme={theme}>
+          {transfer.senderName && <InfoRow label="Sender (Mokalnar)" value={transfer.senderName} theme={theme} />}
+          {transfer.senderMobile && <InfoRow label="Sender Mobile" value={transfer.senderMobile} theme={theme} />}
+          {transfer.receiverName && <InfoRow label="Receiver (Lenar)" value={transfer.receiverName} theme={theme} />}
+          {transfer.receiverMobile && <InfoRow label="Receiver Mobile" value={transfer.receiverMobile} theme={theme} />}
+          {transfer.customerTokenNo && <InfoRow label="Customer Token No" value={transfer.customerTokenNo} theme={theme} mono />}
+        </SectionCard>
+      )}
 
       {/* Audit trail */}
       <SectionCard title="AUDIT TRAIL" theme={theme}>

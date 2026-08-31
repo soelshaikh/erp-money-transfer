@@ -2,6 +2,39 @@
 
 ---
 
+## 2026-09-01 — Session 53
+
+### Partner Transfer Extended — Commission, People, Branch Shortfall
+
+#### Bug Fixes (carried over)
+- **`partner_withdrawal` balance bug**: `buildIncrement` in `MongoBranchLedgerRepository.ts` was missing the case, falling to `default: return {}`. Fixed.
+- **Audit trail time**: `PartnerTransferDetailScreen.tsx` switched from `fmtDate` to `fmtDateTime`.
+
+#### New Events Added
+- `BranchLedger.model.ts`: added `payout_committed_reversed`, `partner_commission`, `partner_commission_reversal`
+- `MongoBranchLedgerRepository.ts`: added `buildIncrement` cases for all three new events
+
+#### PartnerTransfer Model Extended
+New fields: `finalAmount`, `partnerCoversAmount`, `branchCoversAmount`, `commissionSide` (none/collection/payout/payout_extra), `commissionType` (flat/percentage), `commissionValue`, `commissionAmount`, `paymentMethod` (cash/neft/rtgs/imps), `customerTokenNo`, `senderName`, `senderMobile`, `receiverName`, `receiverMobile`
+
+#### Commission Logic (agreed with user)
+- `collection` (Sender Pays): AHM earns commission. Credited at CREATE (pending) or completion (HO-immediate). `finalAmount = amount`.
+- `payout` (Receiver Pays): AHM keeps difference (amount locked, finalAmount less). Credited at COMPLETE. `finalAmount = amount - commission`.
+- `payout_extra` (Receiver Pays Extra): MUM earns commission from Lenar. Credited at COMPLETE. `finalAmount = amount`.
+- No blocking on zero/negative partner balance — branch covers shortfall automatically.
+
+#### Branch Shortfall Logic
+- `partnerCoversAmount = min(amount, max(0, partnerAvail))`; `branchCoversAmount = amount - partnerCovers`
+- CREATE: lock `partnerCovers` in onHolds, `payout_committed` for `branchCovers` in branch ledger
+- COMPLETE: `payout_completed` clears `branchCovers` commitment (balance -= branchCovers)
+- CANCEL/REJECT: `payout_committed_reversed` releases `branchCovers`, reverses sender-pays commission if applicable
+
+#### Files Changed
+Backend: `BranchLedger.model.ts`, `MongoBranchLedgerRepository.ts`, `PartnerTransfer.model.ts`, `CreatePartnerTransfer.ts`, `CompletePartnerTransfer.ts`, `CancelPartnerTransfer.ts`, `RejectPartnerTransfer.ts`, `PartnerTransferController.ts`, `container.ts`
+Mobile: `PartnerTransferScreen.tsx`, `PartnerTransferDetailScreen.tsx`, `externalAccountApi.ts`
+
+---
+
 ## 2026-08-31 — Session 52
 
 ### Partner Fund Management System — Implemented

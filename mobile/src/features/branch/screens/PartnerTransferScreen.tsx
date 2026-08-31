@@ -16,6 +16,20 @@ import { parseApiError } from '../../../utils/apiError';
 import { externalAccountApi, partnerTransferApi } from '../api/externalAccountApi';
 import { branchApi } from '../api/branchApi';
 
+const COMMISSION_SIDES = [
+  { value: 'none', label: 'None' },
+  { value: 'collection', label: 'Sender Pays' },
+  { value: 'payout', label: 'Receiver Pays' },
+  { value: 'payout_extra', label: 'Rcvr Pays Extra' },
+] as const;
+
+const PAYMENT_METHODS = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'neft', label: 'NEFT' },
+  { value: 'rtgs', label: 'RTGS' },
+  { value: 'imps', label: 'IMPS' },
+] as const;
+
 function FieldRow({ label, value, color, theme }: any) {
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 }}>
@@ -27,6 +41,26 @@ function FieldRow({ label, value, color, theme }: any) {
 
 function SectionLabel({ text, theme }: any) {
   return <Text style={{ fontSize: 10, fontWeight: '700', color: theme.colors.textSecondary, marginBottom: 4, marginTop: theme.spacing.sm }}>{text}</Text>;
+}
+
+function InlineInput({ label, value, onChangeText, placeholder, keyboardType, theme }: any) {
+  return (
+    <View style={{ flex: 1 }}>
+      <SectionLabel text={label} theme={theme} />
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder || ''}
+        placeholderTextColor={theme.colors.textSecondary}
+        keyboardType={keyboardType || 'default'}
+        style={{
+          borderWidth: 1, borderColor: theme.colors.border,
+          borderRadius: theme.borderRadius.sm, padding: 10,
+          color: theme.colors.text, fontSize: 14,
+        }}
+      />
+    </View>
+  );
 }
 
 export function PartnerTransferScreen() {
@@ -42,7 +76,23 @@ export function PartnerTransferScreen() {
   const [fromBranchId, setFromBranchId] = useState<string>(myBranchId || '');
   const [toBranchId, setToBranchId] = useState('');
   const [amountStr, setAmountStr] = useState('');
+
+  // People
+  const [senderName, setSenderName] = useState('');
+  const [senderMobile, setSenderMobile] = useState('');
+  const [receiverName, setReceiverName] = useState('');
+  const [receiverMobile, setReceiverMobile] = useState('');
+  const [customerTokenNo, setCustomerTokenNo] = useState('');
+
+  // Commission
+  const [commissionSide, setCommissionSide] = useState<string>('none');
+  const [commissionType, setCommissionType] = useState<string>('flat');
+  const [commissionValueStr, setCommissionValueStr] = useState('');
+
+  // Payment
+  const [paymentMethod, setPaymentMethod] = useState('cash');
   const [remarks, setRemarks] = useState('');
+
   const [error, setError] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -63,8 +113,15 @@ export function PartnerTransferScreen() {
   const selectedAccount = useMemo(() => accounts.find((a: any) => a._id === accountId), [accounts, accountId]);
 
   const amount = Math.round(parseFloat(amountStr) || 0);
+  const commissionValue = Math.round(parseFloat(commissionValueStr) || 0);
 
-  // Per-branch balance data for live preview
+  const commissionAmount = useMemo(() => {
+    if (commissionSide === 'none' || commissionValue <= 0) return 0;
+    return commissionType === 'percentage' ? Math.round(amount * commissionValue / 100) : commissionValue;
+  }, [commissionSide, commissionType, commissionValue, amount]);
+
+  const finalAmount = commissionSide === 'payout' ? Math.max(0, amount - commissionAmount) : amount;
+
   const fromBranchBalance: number = useMemo(() => {
     if (!selectedAccount || !fromBranchId) return 0;
     const bals = selectedAccount.balances || {};
@@ -85,6 +142,10 @@ export function PartnerTransferScreen() {
     return bals[toBranchId] ?? 0;
   }, [selectedAccount, toBranchId]);
 
+  // Shortfall calculation (informational — we always allow)
+  const partnerCoversAmount = Math.min(amount, fromBranchAvailable);
+  const branchCoversAmount = amount - partnerCoversAmount;
+
   const fromBranch = branches.find((b: any) => b._id === fromBranchId);
   const toBranch = branches.find((b: any) => b._id === toBranchId);
 
@@ -93,9 +154,9 @@ export function PartnerTransferScreen() {
     if (!toBranchId) return 'Select destination branch';
     if (fromBranchId === toBranchId) return 'Source and destination branches must be different';
     if (amount <= 0) return 'Enter a valid amount';
-    if (amount > fromBranchAvailable) return `Insufficient available balance at ${fromBranch?.code || 'source'}. Available: ${fmtAmt(fromBranchAvailable)}`;
+    if (commissionSide !== 'none' && commissionValue <= 0) return 'Enter commission value';
     return null;
-  }, [fromBranchId, toBranchId, amount, fromBranchAvailable, fromBranch]);
+  }, [fromBranchId, toBranchId, amount, commissionSide, commissionValue]);
 
   const mutation = useMutation({
     mutationFn: () => partnerTransferApi.create({
@@ -104,6 +165,15 @@ export function PartnerTransferScreen() {
       toBranchId,
       amount,
       remarks: remarks.trim() || undefined,
+      senderName: senderName.trim() || undefined,
+      senderMobile: senderMobile.trim() || undefined,
+      receiverName: receiverName.trim() || undefined,
+      receiverMobile: receiverMobile.trim() || undefined,
+      customerTokenNo: customerTokenNo.trim() || undefined,
+      commissionSide,
+      commissionType: commissionSide !== 'none' ? commissionType : undefined,
+      commissionValue: commissionSide !== 'none' ? commissionValue : undefined,
+      paymentMethod,
     }),
     onSuccess: (data: any) => {
       setShowConfirm(false);
@@ -144,6 +214,42 @@ export function PartnerTransferScreen() {
     </View>
   );
 
+  const ChipSelector = ({ label, options, value, onChange }: any) => (
+    <View>
+      <SectionLabel text={label} theme={theme} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.xs }}>
+        {options.map((opt: any) => {
+          const active = value === opt.value;
+          return (
+            <TouchableOpacity
+              key={opt.value}
+              onPress={() => onChange(opt.value)}
+              style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: active ? theme.colors.primary : theme.colors.border, backgroundColor: active ? theme.colors.primary : theme.colors.surface }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: active ? '#fff' : theme.colors.text }}>{opt.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+
+  const commissionDesc = useMemo(() => {
+    if (commissionSide === 'none' || !commissionAmount) return null;
+    if (commissionSide === 'collection') {
+      return `Mokalnar pays ₹${fmtAmt(commissionAmount)} extra commission → stays at ${fromBranch?.code || 'source'} branch`;
+    }
+    if (commissionSide === 'payout') {
+      return `Commission deducted from transfer → Lenar receives ₹${fmtAmt(finalAmount)} (₹${fmtAmt(commissionAmount)} kept at ${fromBranch?.code || 'source'})`;
+    }
+    if (commissionSide === 'payout_extra') {
+      return `Lenar pays ₹${fmtAmt(commissionAmount)} extra at ${toBranch?.code || 'dest'} branch`;
+    }
+    return null;
+  }, [commissionSide, commissionAmount, finalAmount, fromBranch, toBranch]);
+
+  const showPreview = fromBranchId && toBranchId && fromBranchId !== toBranchId && amount > 0;
+
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={{ padding: theme.spacing.md, gap: theme.spacing.sm }} keyboardShouldPersistTaps="handled">
@@ -159,12 +265,36 @@ export function PartnerTransferScreen() {
           </View>
         </View>
 
+        {/* Sender (Mokalnar) */}
+        <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+          <InlineInput label="SENDER NAME (MOKALNAR)" value={senderName} onChangeText={setSenderName} placeholder="Full name" theme={theme} />
+          <InlineInput label="SENDER MOBILE" value={senderMobile} onChangeText={setSenderMobile} placeholder="10-digit" keyboardType="phone-pad" theme={theme} />
+        </View>
+
+        {/* Receiver (Lenar) */}
+        <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+          <InlineInput label="RECEIVER NAME (LENAR)" value={receiverName} onChangeText={setReceiverName} placeholder="Full name" theme={theme} />
+          <InlineInput label="RECEIVER MOBILE" value={receiverMobile} onChangeText={setReceiverMobile} placeholder="10-digit" keyboardType="phone-pad" theme={theme} />
+        </View>
+
+        {/* Token number */}
+        <View>
+          <SectionLabel text="CUSTOMER TOKEN NO (OPTIONAL)" theme={theme} />
+          <TextInput
+            value={customerTokenNo}
+            onChangeText={setCustomerTokenNo}
+            placeholder="e.g. TK-2024-00123"
+            placeholderTextColor={theme.colors.textSecondary}
+            style={{ borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.borderRadius.sm, padding: 10, color: theme.colors.text, fontSize: 14 }}
+          />
+        </View>
+
         {/* From branch */}
         {isHO ? (
-          <BranchSelector label="FROM BRANCH" value={fromBranchId} onChange={setFromBranchId} excludeId={toBranchId} />
+          <BranchSelector label="FROM BRANCH (MOKALNAR)" value={fromBranchId} onChange={setFromBranchId} excludeId={toBranchId} />
         ) : (
           <View>
-            <SectionLabel text="FROM BRANCH" theme={theme} />
+            <SectionLabel text="FROM BRANCH (MOKALNAR)" theme={theme} />
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, padding: theme.spacing.sm, backgroundColor: withAlpha(theme.colors.primary, 0.06), borderRadius: theme.borderRadius.sm }}>
               <Ionicons name="lock-closed-outline" size={14} color={theme.colors.textSecondary} />
               <Text style={{ color: theme.colors.text, fontWeight: '600' }}>{fromBranch?.code} — {fromBranch?.name}</Text>
@@ -179,7 +309,7 @@ export function PartnerTransferScreen() {
         </View>
 
         {/* To branch */}
-        <BranchSelector label="TO BRANCH" value={toBranchId} onChange={setToBranchId} excludeId={fromBranchId} />
+        <BranchSelector label="TO BRANCH (LENAR)" value={toBranchId} onChange={setToBranchId} excludeId={fromBranchId} />
 
         {/* Amount */}
         <View>
@@ -190,15 +320,72 @@ export function PartnerTransferScreen() {
             keyboardType="decimal-pad"
             placeholder="₹0"
             placeholderTextColor={theme.colors.textSecondary}
-            style={{ borderWidth: 1.5, borderColor: amount > fromBranchAvailable && amount > 0 ? theme.colors.error : theme.colors.border, borderRadius: theme.borderRadius.sm, padding: 12, color: theme.colors.text, fontSize: 22, fontWeight: '700' }}
+            style={{ borderWidth: 1.5, borderColor: theme.colors.border, borderRadius: theme.borderRadius.sm, padding: 12, color: theme.colors.text, fontSize: 22, fontWeight: '700' }}
           />
           {fromBranchId && (
-            <Text style={{ marginTop: 4, fontSize: 12, color: amount > fromBranchAvailable && amount > 0 ? theme.colors.error : theme.colors.textSecondary }}>
-              Available at {fromBranch?.code || '—'}: {fmtAmt(fromBranchAvailable)}
-              {fromBranchOnHold > 0 ? ` (${fmtAmt(fromBranchOnHold)} on hold)` : ''}
-            </Text>
+            <View style={{ marginTop: 4, flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
+                Available at {fromBranch?.code || '—'}: {fmtAmt(fromBranchAvailable)}
+                {fromBranchOnHold > 0 ? ` (${fmtAmt(fromBranchOnHold)} on hold)` : ''}
+              </Text>
+              {branchCoversAmount > 0 && amount > 0 && (
+                <Text style={{ fontSize: 11, color: theme.colors.warning, fontWeight: '600' }}>Branch covers {fmtAmt(branchCoversAmount)}</Text>
+              )}
+            </View>
           )}
         </View>
+
+        {/* Payment method */}
+        <ChipSelector label="PAYMENT METHOD" options={PAYMENT_METHODS} value={paymentMethod} onChange={setPaymentMethod} />
+
+        {/* Commission side */}
+        <ChipSelector label="COMMISSION" options={COMMISSION_SIDES} value={commissionSide} onChange={(v: string) => { setCommissionSide(v); }} />
+
+        {/* Commission type + value */}
+        {commissionSide !== 'none' && (
+          <View style={{ gap: theme.spacing.xs }}>
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+              {/* Type toggle */}
+              <View style={{ flex: 1 }}>
+                <SectionLabel text="COMMISSION TYPE" theme={theme} />
+                <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.borderRadius.sm, overflow: 'hidden' }}>
+                  {['flat', 'percentage'].map((t) => {
+                    const active = commissionType === t;
+                    return (
+                      <TouchableOpacity
+                        key={t}
+                        onPress={() => setCommissionType(t)}
+                        style={{ flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: active ? theme.colors.primary : theme.colors.surface }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: active ? '#fff' : theme.colors.text }}>{t === 'flat' ? 'Flat ₹' : 'Percent %'}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+              {/* Value */}
+              <View style={{ flex: 1 }}>
+                <SectionLabel text={commissionType === 'percentage' ? 'PERCENTAGE (%)' : 'AMOUNT (₹)'} theme={theme} />
+                <TextInput
+                  value={commissionValueStr}
+                  onChangeText={setCommissionValueStr}
+                  keyboardType="decimal-pad"
+                  placeholder={commissionType === 'percentage' ? '0.00%' : '₹0'}
+                  placeholderTextColor={theme.colors.textSecondary}
+                  style={{ borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.borderRadius.sm, padding: 10, color: theme.colors.text, fontSize: 16, fontWeight: '700' }}
+                />
+              </View>
+            </View>
+
+            {/* Commission preview */}
+            {commissionAmount > 0 && commissionDesc && (
+              <View style={{ backgroundColor: withAlpha(theme.colors.warning, 0.08), borderRadius: theme.borderRadius.sm, padding: theme.spacing.sm, borderLeftWidth: 3, borderLeftColor: theme.colors.warning }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.warning, marginBottom: 2 }}>Commission: {fmtAmt(commissionAmount)}</Text>
+                <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>{commissionDesc}</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Remarks */}
         <View>
@@ -214,7 +401,7 @@ export function PartnerTransferScreen() {
         </View>
 
         {/* Live preview */}
-        {fromBranchId && toBranchId && fromBranchId !== toBranchId && amount > 0 && (
+        {showPreview && (
           <View style={{ borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.borderRadius.md, overflow: 'hidden' }}>
             <View style={{ backgroundColor: withAlpha(theme.colors.primary, 0.06), padding: theme.spacing.sm }}>
               <Text style={{ fontSize: 10, fontWeight: '800', color: theme.colors.primary }}>TRANSFER PREVIEW</Text>
@@ -222,33 +409,39 @@ export function PartnerTransferScreen() {
             <View style={{ padding: theme.spacing.md }}>
               {/* Source */}
               <View style={{ marginBottom: theme.spacing.sm }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.textSecondary, marginBottom: 4 }}>{fromBranch?.code} (SOURCE)</Text>
-                <FieldRow label="Current Balance" value={fmtAmt(fromBranchBalance)} theme={theme} />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.textSecondary, marginBottom: 4 }}>{fromBranch?.code} — SOURCE (MOKALNAR)</Text>
+                <FieldRow label="Partner Balance" value={fmtAmt(fromBranchBalance)} theme={theme} />
                 <FieldRow label="On Hold" value={fmtAmt(fromBranchOnHold)} color={fromBranchOnHold > 0 ? theme.colors.warning : theme.colors.textSecondary} theme={theme} />
                 <FieldRow label="Available" value={fmtAmt(fromBranchAvailable)} color={theme.colors.success} theme={theme} />
-                <FieldRow label="Transfer Amount" value={`− ${fmtAmt(amount)}`} color={theme.colors.error} theme={theme} />
-                <View style={{ height: 1, backgroundColor: theme.colors.border, marginVertical: 4 }} />
-                <FieldRow label="After Transfer" value={fmtAmt(Math.max(0, fromBranchBalance - amount))} color={theme.colors.primary} theme={theme} />
+                {partnerCoversAmount > 0 && <FieldRow label="Partner covers" value={`− ${fmtAmt(partnerCoversAmount)}`} color={theme.colors.error} theme={theme} />}
+                {branchCoversAmount > 0 && <FieldRow label="Branch covers (on hold)" value={fmtAmt(branchCoversAmount)} color={theme.colors.warning} theme={theme} />}
+                {commissionSide === 'collection' && commissionAmount > 0 && (
+                  <FieldRow label="Commission earned" value={`+ ${fmtAmt(commissionAmount)}`} color={theme.colors.success} theme={theme} />
+                )}
+                {commissionSide === 'payout' && commissionAmount > 0 && (
+                  <FieldRow label="Commission earned (on complete)" value={`+ ${fmtAmt(commissionAmount)}`} color={theme.colors.success} theme={theme} />
+                )}
               </View>
 
               {/* Arrow */}
               <View style={{ alignItems: 'center', paddingVertical: 4 }}>
                 <Ionicons name="arrow-down" size={16} color={theme.colors.textSecondary} />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.textSecondary }}>{fmtAmt(finalAmount)}</Text>
               </View>
 
               {/* Destination */}
               <View style={{ marginTop: theme.spacing.sm }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.textSecondary, marginBottom: 4 }}>{toBranch?.code} (DESTINATION)</Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.textSecondary, marginBottom: 4 }}>{toBranch?.code} — DESTINATION (LENAR)</Text>
                 <FieldRow label="Current Balance" value={fmtAmt(toBranchBalance)} theme={theme} />
-                <FieldRow label="Transfer Amount" value={`+ ${fmtAmt(amount)}`} color={theme.colors.success} theme={theme} />
+                <FieldRow label="Receives" value={`+ ${fmtAmt(finalAmount)}`} color={theme.colors.success} theme={theme} />
+                {commissionSide === 'payout' && commissionAmount > 0 && (
+                  <FieldRow label="Commission deducted" value={`− ${fmtAmt(commissionAmount)}`} color={theme.colors.error} theme={theme} />
+                )}
+                {commissionSide === 'payout_extra' && commissionAmount > 0 && (
+                  <FieldRow label="Commission earned (on complete)" value={`+ ${fmtAmt(commissionAmount)}`} color={theme.colors.success} theme={theme} />
+                )}
                 <View style={{ height: 1, backgroundColor: theme.colors.border, marginVertical: 4 }} />
-                <FieldRow label="After Transfer" value={fmtAmt(toBranchBalance + amount)} color={theme.colors.primary} theme={theme} />
-              </View>
-
-              {/* Total unchanged */}
-              <View style={{ marginTop: theme.spacing.sm, paddingTop: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={[theme.typography.caption, { color: theme.colors.textSecondary }]}>Partner Total Balance</Text>
-                <Text style={{ fontSize: 12, color: theme.colors.success, fontWeight: '700' }}>No Change · {fmtAmt(selectedAccount?.totalBalance ?? selectedAccount?.balance ?? 0)}</Text>
+                <FieldRow label="After Transfer" value={fmtAmt(toBranchBalance + finalAmount)} color={theme.colors.primary} theme={theme} />
               </View>
             </View>
           </View>
@@ -292,12 +485,21 @@ export function PartnerTransferScreen() {
                 <Ionicons name="arrow-forward" size={16} color={theme.colors.textSecondary} />
                 <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.text }}>{toBranch?.code}</Text>
               </View>
+              {(senderName || receiverName) && (
+                <Text style={{ fontSize: 12, color: theme.colors.textSecondary, textAlign: 'center', marginTop: 2 }}>
+                  {senderName || '—'} → {receiverName || '—'}
+                </Text>
+              )}
             </View>
 
             <View style={{ backgroundColor: withAlpha(theme.colors.primary, 0.06), borderRadius: theme.borderRadius.sm, padding: theme.spacing.sm, marginBottom: theme.spacing.md, gap: 4 }}>
-              <FieldRow label={`${fromBranch?.code} after`} value={fmtAmt(Math.max(0, fromBranchBalance - amount))} color={theme.colors.error} theme={theme} />
-              <FieldRow label={`${toBranch?.code} after`} value={fmtAmt(toBranchBalance + amount)} color={theme.colors.success} theme={theme} />
-              <FieldRow label="Partner total" value={`${fmtAmt(selectedAccount?.totalBalance ?? 0)} (no change)`} theme={theme} />
+              {partnerCoversAmount > 0 && <FieldRow label="Partner covers" value={fmtAmt(partnerCoversAmount)} theme={theme} />}
+              {branchCoversAmount > 0 && <FieldRow label="Branch covers" value={fmtAmt(branchCoversAmount)} color={theme.colors.warning} theme={theme} />}
+              <FieldRow label="Lenar receives" value={fmtAmt(finalAmount)} color={theme.colors.success} theme={theme} />
+              {commissionSide !== 'none' && commissionAmount > 0 && (
+                <FieldRow label="Commission" value={fmtAmt(commissionAmount)} color={theme.colors.warning} theme={theme} />
+              )}
+              <FieldRow label="Payment method" value={paymentMethod.toUpperCase()} theme={theme} />
             </View>
 
             {!isHO && (

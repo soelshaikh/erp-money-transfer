@@ -42,11 +42,19 @@ export default class PartnerTransferController {
   async create(req: any, res: any) {
     const { tenantId, id: createdBy, name: createdByName, role } = req.user;
     const createdByRole = role === 'head_office' ? 'head_office' : 'branch';
-    const { externalAccountId, fromBranchId, toBranchId, amount, remarks } = req.body;
+    const {
+      externalAccountId, fromBranchId, toBranchId, amount, remarks,
+      senderName, senderMobile, receiverName, receiverMobile, customerTokenNo,
+      commissionSide, commissionType, commissionValue, paymentMethod,
+    } = req.body;
     const result = await this.createPartnerTransfer.execute({
       tenantId, externalAccountId, fromBranchId, toBranchId,
       amount: Math.round(amount),
       remarks, createdBy, createdByName, createdByRole,
+      senderName, senderMobile, receiverName, receiverMobile, customerTokenNo,
+      commissionSide, commissionType,
+      commissionValue: commissionValue ? Math.round(commissionValue) : 0,
+      paymentMethod,
     });
     res.status(201).json({ success: true, data: result });
   }

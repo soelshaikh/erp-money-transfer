@@ -305,11 +305,11 @@ export default function buildContainer(io: any) {
   const getExternalLedger     = new GetExternalLedger();
   const externalAccountController = new ExternalAccountController({ createExternalAccount, getExternalAccounts, updateExternalAccount, addExternalEntry, getExternalLedger });
 
-  const createPartnerTransfer   = new CreatePartnerTransfer({ branchRepository });
+  const createPartnerTransfer   = new CreatePartnerTransfer({ branchRepository, branchLedgerRepository });
   const approvePartnerTransfer  = new ApprovePartnerTransfer();
-  const completePartnerTransfer = new CompletePartnerTransfer({ branchRepository });
-  const cancelPartnerTransfer   = new CancelPartnerTransfer();
-  const rejectPartnerTransfer   = new RejectPartnerTransfer();
+  const completePartnerTransfer = new CompletePartnerTransfer({ branchRepository, branchLedgerRepository });
+  const cancelPartnerTransfer   = new CancelPartnerTransfer({ branchLedgerRepository });
+  const rejectPartnerTransfer   = new RejectPartnerTransfer({ branchLedgerRepository });
   const getPartnerTransfers     = new GetPartnerTransfers();
   const partnerTransferController = new PartnerTransferController({ createPartnerTransfer, approvePartnerTransfer, completePartnerTransfer, cancelPartnerTransfer, rejectPartnerTransfer, getPartnerTransfers });
 

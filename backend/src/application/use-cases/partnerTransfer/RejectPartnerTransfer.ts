@@ -3,6 +3,12 @@ import PartnerTransferModel from '../../../infrastructure/db/models/PartnerTrans
 import { NotFoundError, ConflictError } from '../../../domain/errors';
 
 export default class RejectPartnerTransfer {
+  branchLedgerRepository: any;
+
+  constructor(deps: any) {
+    this.branchLedgerRepository = deps.branchLedgerRepository;
+  }
+
   async execute(params: any): Promise<any> {
     const { tenantId, transferId, userId, userName, reason } = params;
 
@@ -11,11 +17,33 @@ export default class RejectPartnerTransfer {
     if (transfer.status !== 'pending') throw new ConflictError(`Transfer cannot be rejected — current status: ${transfer.status}`);
 
     const fromBranchIdStr = transfer.fromBranchId.toString();
+    const partnerCoversAmount = (transfer as any).partnerCoversAmount ?? transfer.amount;
+    const branchCoversAmount = (transfer as any).branchCoversAmount ?? 0;
+    const commissionSide = (transfer as any).commissionSide ?? 'none';
+    const commissionAmount = (transfer as any).commissionAmount ?? 0;
 
-    await ExternalAccountModel.updateOne(
-      { _id: transfer.externalAccountId, tenantId },
-      { $inc: { [`onHolds.${fromBranchIdStr}`]: -transfer.amount } },
-    );
+    if (partnerCoversAmount > 0) {
+      await ExternalAccountModel.updateOne(
+        { _id: transfer.externalAccountId, tenantId },
+        { $inc: { [`onHolds.${fromBranchIdStr}`]: -partnerCoversAmount } },
+      );
+    }
+
+    if (branchCoversAmount > 0) {
+      await this.branchLedgerRepository.addEntry(tenantId, transfer.fromBranchId, {
+        transactionId: null, type: 'pending_reversed', amount: branchCoversAmount,
+        description: `Partner transfer rejected — ${transfer.transferRef}`,
+        event: 'payout_committed_reversed', tokenNumber: null,
+      });
+    }
+
+    if (commissionSide === 'collection' && commissionAmount > 0) {
+      await this.branchLedgerRepository.addEntry(tenantId, transfer.fromBranchId, {
+        transactionId: null, type: 'debit', amount: commissionAmount,
+        description: `Partner transfer commission reversal — ${transfer.transferRef}`,
+        event: 'partner_commission_reversal', tokenNumber: null,
+      });
+    }
 
     transfer.status = 'rejected';
     transfer.rejectedBy = userId;
