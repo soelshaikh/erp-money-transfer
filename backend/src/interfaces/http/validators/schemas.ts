@@ -10,7 +10,7 @@ const commissionSplit = Joi.object({
   headOfficePct: Joi.number().min(0).max(100).required(),
 }).custom((value, helpers) => {
   if (2 * value.branchPct + value.headOfficePct !== 100) {
-    return helpers.message('2× Branch % + Head Office % must equal 100');
+    return helpers.message({ 'any.invalid': '2× Branch % + Head Office % must equal 100' });
   }
   return value;
 });
