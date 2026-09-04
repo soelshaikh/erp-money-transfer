@@ -158,6 +158,20 @@ export function PartnerTransferScreen() {
     return null;
   }, [fromBranchId, toBranchId, amount, commissionSide, commissionValue]);
 
+  const commissionDesc = useMemo(() => {
+    if (commissionSide === 'none' || !commissionAmount) return null;
+    if (commissionSide === 'collection') {
+      return `Mokalnar pays ₹${fmtAmt(commissionAmount)} extra commission → stays at ${fromBranch?.code || 'source'} branch`;
+    }
+    if (commissionSide === 'payout') {
+      return `Commission deducted from transfer → Lenar receives ₹${fmtAmt(finalAmount)} (₹${fmtAmt(commissionAmount)} kept at ${fromBranch?.code || 'source'})`;
+    }
+    if (commissionSide === 'payout_extra') {
+      return `Lenar pays ₹${fmtAmt(commissionAmount)} extra at ${toBranch?.code || 'dest'} branch`;
+    }
+    return null;
+  }, [commissionSide, commissionAmount, finalAmount, fromBranch, toBranch]);
+
   const mutation = useMutation({
     mutationFn: () => partnerTransferApi.create({
       externalAccountId: accountId,
@@ -233,20 +247,6 @@ export function PartnerTransferScreen() {
       </ScrollView>
     </View>
   );
-
-  const commissionDesc = useMemo(() => {
-    if (commissionSide === 'none' || !commissionAmount) return null;
-    if (commissionSide === 'collection') {
-      return `Mokalnar pays ₹${fmtAmt(commissionAmount)} extra commission → stays at ${fromBranch?.code || 'source'} branch`;
-    }
-    if (commissionSide === 'payout') {
-      return `Commission deducted from transfer → Lenar receives ₹${fmtAmt(finalAmount)} (₹${fmtAmt(commissionAmount)} kept at ${fromBranch?.code || 'source'})`;
-    }
-    if (commissionSide === 'payout_extra') {
-      return `Lenar pays ₹${fmtAmt(commissionAmount)} extra at ${toBranch?.code || 'dest'} branch`;
-    }
-    return null;
-  }, [commissionSide, commissionAmount, finalAmount, fromBranch, toBranch]);
 
   const showPreview = fromBranchId && toBranchId && fromBranchId !== toBranchId && amount > 0;
 
