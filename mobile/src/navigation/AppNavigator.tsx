@@ -32,8 +32,8 @@ function SocketManager() {
  *   else                              → AuthNavigator (Login)
  */
 export function AppNavigator() {
-  const { isAuthenticated, isLoading: authLoading, finishLoading, pendingDeviceInfo, isSignedOff, loadSignOffState } = useAuthStore();
-  const { isConfigured, isDeviceApproved, isLoading: configLoading, load: loadConfig } = useConfigStore();
+  const { isAuthenticated, isLoading: authLoading, finishLoading, pendingDeviceInfo, isSignedOff, loadSignOffState, logoutReason } = useAuthStore();
+  const { isConfigured, isDeviceApproved, isLockedOut, isLoading: configLoading, load: loadConfig } = useConfigStore();
   const loadLang = useLangStore((s) => s.load);
 
   useEffect(() => {
@@ -93,6 +93,12 @@ export function AppNavigator() {
 
   if (pendingDeviceInfo) {
     return <PendingDeviceScreen />;
+  }
+
+  // Company locked out (server was unreachable at last session end).
+  // Persisted in storage — survives page refresh. Cleared only via configStore.clearLockOut().
+  if (isLockedOut) {
+    return <NotesScreen />;
   }
 
   return (

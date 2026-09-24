@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { storage } from '../utils/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { queryClient } from '../api/queryClient';
+import { useConfigStore } from './configStore';
 
 const SIGN_OFF_KEY = 'sign_off_state';
 
@@ -90,6 +91,9 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   forceLogout: async (reason: LogoutReason) => {
     await clearAuthTokens();
+    if (reason === 'server_down' || reason === 'network_unreachable') {
+      await useConfigStore.getState().lockOut();
+    }
     set({ ...RESET_AUTH, logoutReason: reason });
   },
 

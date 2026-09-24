@@ -22,7 +22,7 @@ const MARGIN_COLOR  = '#E8A0A0';
 
 export function NotesScreen() {
   const { t } = useTranslation();
-  const { branchCode, save, deviceApprovalStatus, setDeviceStatus } = useConfigStore();
+  const { branchCode, save, deviceApprovalStatus, setDeviceStatus, isLockedOut, clearLockOut } = useConfigStore();
   const { isSignedOff, signedOffUserId, clearSignOff } = useAuthStore();
 
   // Mode: 'gate' = secret code entry, 'signedOff' = staff signed off today, 'slug' = company slug entry
@@ -91,31 +91,36 @@ export function NotesScreen() {
     if (loading) return;
     const trimmed = text.trim();
     if (!trimmed) {
-      Alert.alert(t('auth.companyId'), t('auth.companyIdPlaceholder'));
+      if (!isLockedOut) Alert.alert(t('auth.companyId'), t('auth.companyIdPlaceholder'));
       return;
     }
     setLoading(true);
     try {
       const config = await fetchTenantConfig(trimmed);
-      if (config.status === 'suspended') {
-        Alert.alert('Company Suspended', 'This company account has been suspended. Please contact support.');
+
+      if (config.status === 'suspended' || config.status === 'inactive') {
+        // Admin has not re-activated yet — stay locked silently (no alert while locked out)
+        if (!isLockedOut) {
+          Alert.alert(
+            config.status === 'suspended' ? 'Company Suspended' : 'Company Inactive',
+            config.status === 'suspended'
+              ? 'This company account has been suspended. Please contact support.'
+              : 'This company account is not active. Please contact support.',
+          );
+        }
         setLoading(false);
         return;
       }
-      if (config.status === 'inactive') {
-        Alert.alert('Company Inactive', 'This company account is not active. Please contact support.');
-        setLoading(false);
-        return;
-      }
-      // Store both the slug and the resolved backend URL
+
+      // status === 'active' — if locked out, admin has re-activated → clear the lock
+      if (isLockedOut) await clearLockOut();
       await save(trimmed, config.apiUrl);
     } catch (e: any) {
       const code = e?.response?.data?.error?.code;
-      if (code === 'NOT_FOUND') {
+      if (!isLockedOut && code === 'NOT_FOUND') {
         Alert.alert('Not Found', 'No company found with that ID. Please check and try again.');
-      } else {
-        Alert.alert('Network Error', 'Could not reach the server. Please check your connection.');
       }
+      // Network error or locked out: silently stay
     }
     setLoading(false);
     setSaved(true);
