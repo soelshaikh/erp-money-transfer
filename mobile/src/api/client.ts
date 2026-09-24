@@ -19,7 +19,7 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
   // Resolve the company-specific backend URL stored after the slug/config lookup.
   // Falls back to the central URL so existing behaviour is preserved.
   const tenantApiUrl = await storage.getItemAsync('tenant_api_url');
-  if (tenantApiUrl) config.baseURL = tenantApiUrl;
+  if (tenantApiUrl && tenantApiUrl.startsWith('http')) config.baseURL = tenantApiUrl;
 
   const token = await storage.getItemAsync('accessToken');
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -79,14 +79,15 @@ apiClient.interceptors.response.use(
         if (!refreshToken) throw new Error('no refresh token');
         // Use the stored tenant apiUrl for the refresh call too
         const tenantApiUrl = await storage.getItemAsync('tenant_api_url');
-        const baseUrl = tenantApiUrl || CENTRAL_URL;
-        const { data } = await axios.post(`${baseUrl}/auth/refresh`, { refreshToken });
+        const resolvedUrl = (tenantApiUrl && tenantApiUrl.startsWith('http')) ? tenantApiUrl : CENTRAL_URL;
+        const { data } = await axios.post(`${resolvedUrl}/auth/refresh`, { refreshToken });
         const newToken = data.data.accessToken;
         await storage.setItemAsync('accessToken', newToken);
         original.headers.Authorization = `Bearer ${newToken}`;
         return apiClient(original);
       } catch {
         await forceLogout('session_expired');
+        return Promise.reject(error);
       }
     }
 

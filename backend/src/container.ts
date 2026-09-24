@@ -350,6 +350,7 @@ export default function buildContainer(io: any) {
   const deviceSessionController = new DeviceSessionController({ listDeviceSessions, approveDeviceSession, rejectDeviceSession, suspendDeviceSession, suspendAllSessions });
 
   return {
+    tenantRepository,
     authController,
     branchController,
     userController,

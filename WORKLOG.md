@@ -2,6 +2,28 @@
 
 ---
 
+## 2026-09-24 — Session 54
+
+### Bug Fixes: ws://undefined, Query undefined, 401 refresh
+
+**Bug 1 — `ws://undefined/socket.io/`** (root cause fixed)
+`LoginScreen` called `configStore.save(slug)` with only 1 arg. `configStore.save(code, apiUrl)` has `apiUrl` as 2nd arg — when called with 1 arg, `apiUrl = undefined` → `storage.setItemAsync('tenant_api_url', undefined)` → on web, `localStorage.setItem` coerces `undefined` to the string `"undefined"`. On next load, `useSocket` and `apiClient` both read `"undefined"` (truthy) and use it as the base URL → `ws://undefined/socket.io/`.
+
+Fixes:
+- `configStore.save` — made `apiUrl` optional; only writes to storage if provided (never overwrites with undefined).
+- `useSocket.ts` — guards `tenantApiUrl` with `.startsWith('http')` before using it.
+- `client.ts` — same guard in request interceptor and refresh URL resolution.
+
+**Bug 2 — "Query data cannot be undefined"**
+After a failed token refresh, `client.ts` called `forceLogout('session_expired')` in a catch block but didn't rethrow or return a rejection. The interceptor resolved with `undefined`, which TanStack Query treats as invalid. Fixed: added `return Promise.reject(error)` after `forceLogout` in the catch.
+
+**Bug 3 — 401 on /auth/refresh**
+Genuine session expiry (refresh token > 7 days on Render). Not a code bug — user needs to log in again. Bug 2's fix ensures this now correctly triggers forceLogout and redirect to the login screen.
+
+**Manual step required**: Open browser DevTools → Application → Local Storage → delete the `tenant_api_url` key → re-enter company slug in the app.
+
+---
+
 ## 2026-09-01 — Session 53
 
 ### Partner Transfer Extended — Commission, People, Branch Shortfall

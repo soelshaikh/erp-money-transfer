@@ -166,6 +166,11 @@ export function TenantDetailScreen({ route, navigation }: Props) {
   const [hoShowPassword, setHoShowPassword] = useState(false);
   const hoPasswordRef = useRef<TextInput>(null);
 
+  const [showApiUrlModal, setShowApiUrlModal] = useState(false);
+  const [newApiUrl, setNewApiUrl] = useState('');
+  const [apiUrlError, setApiUrlError] = useState('');
+  const apiUrlInputRef = useRef<TextInput>(null);
+
   const [localExportFormats, setLocalExportFormats] = useState<string[]>(['csv', 'excel', 'pdf']);
   const [creditCommFlag, setCreditCommFlag] = useState(false);
   const [savingCreditCommFlag, setSavingCreditCommFlag] = useState(false);
@@ -251,6 +256,12 @@ export function TenantDetailScreen({ route, navigation }: Props) {
     onError: (e: any) => showToast('error', 'Error', parseApiError(e) ?? 'Failed to update export formats'),
   });
 
+  const apiUrlMutation = useMutation({
+    mutationFn: (url: string | null) => tenantApi.updateApiUrl(tenantId, url),
+    onSuccess: () => { invalidate(); setShowApiUrlModal(false); setNewApiUrl(''); showToast('success', 'Updated', 'Server URL saved'); },
+    onError: (e: any) => showToast('error', 'Error', parseApiError(e) ?? 'Failed to update server URL'),
+  });
+
   const resetHoPasswordMutation = useMutation({
     mutationFn: () => tenantApi.resetHoPassword(tenantId, hoNewPassword),
     onSuccess: () => {
@@ -311,6 +322,23 @@ export function TenantDetailScreen({ route, navigation }: Props) {
 
   const handleChangeBusinessType = () => {
     setShowBizTypeSheet(true);
+  };
+
+  const handleOpenApiUrlModal = () => {
+    setNewApiUrl((tenant as any)?.apiUrl || '');
+    setApiUrlError('');
+    setShowApiUrlModal(true);
+    setTimeout(() => apiUrlInputRef.current?.focus(), 300);
+  };
+
+  const handleSaveApiUrl = () => {
+    setApiUrlError('');
+    const trimmed = newApiUrl.trim();
+    if (trimmed && !trimmed.startsWith('http')) {
+      setApiUrlError('URL must start with http:// or https://');
+      return;
+    }
+    apiUrlMutation.mutate(trimmed || null);
   };
 
   const handleOpenLimitModal = () => {
@@ -490,6 +518,8 @@ export function TenantDetailScreen({ route, navigation }: Props) {
             />
             <Divider theme={theme} />
             <InfoRow label="Registered" value={(tenant as any).createdAt ? fmtDate(new Date((tenant as any).createdAt)) : '—'} theme={theme} />
+            <Divider theme={theme} />
+            <InfoRow label="Server URL" value={(tenant as any).apiUrl || 'Default (shared)'} theme={theme} />
           </AppCard>
         )}
 
@@ -665,6 +695,14 @@ export function TenantDetailScreen({ route, navigation }: Props) {
                 value={(tenant as any).businessType === 'aangadia' ? 'Juna Aangadia' : 'Enterprise'}
                 onPress={handleChangeBusinessType}
                 loading={businessTypeMutation.isPending}
+              />
+              <ActionItem
+                icon="server-outline"
+                label="Server URL"
+                value={(tenant as any).apiUrl ? 'Custom' : 'Default'}
+                subtitle={(tenant as any).apiUrl || 'Using shared backend'}
+                onPress={handleOpenApiUrlModal}
+                loading={apiUrlMutation.isPending}
                 isLast
               />
             </ActionList>
@@ -837,6 +875,57 @@ export function TenantDetailScreen({ route, navigation }: Props) {
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleSaveSplit} disabled={commissionSplitMutation.isPending} style={{ flex: 1, padding: theme.spacing.md, borderRadius: theme.borderRadius.md, backgroundColor: theme.colors.primary, alignItems: 'center' }} activeOpacity={0.8}>
                   <Text style={[theme.typography.label, { color: '#fff' }]}>{commissionSplitMutation.isPending ? 'Saving…' : t('common.save')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={showApiUrlModal} transparent animationType="fade" onRequestClose={() => { setShowApiUrlModal(false); setNewApiUrl(''); setApiUrlError(''); }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: theme.spacing.lg }}>
+            <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.lg, padding: theme.spacing.lg }}>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: withAlpha(theme.colors.primary, 0.12), justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: theme.spacing.md }}>
+                <Ionicons name="server-outline" size={26} color={theme.colors.primary} />
+              </View>
+              <Text style={[theme.typography.h3, { color: theme.colors.text, textAlign: 'center', marginBottom: theme.spacing.xs }]}>Server URL</Text>
+              <Text style={[theme.typography.body, { color: theme.colors.textSecondary, textAlign: 'center', marginBottom: theme.spacing.lg }]}>
+                Set a dedicated backend URL for this company. Leave empty to use the shared default server.
+              </Text>
+              <TextInput
+                ref={apiUrlInputRef}
+                value={newApiUrl}
+                onChangeText={(v) => { setNewApiUrl(v); setApiUrlError(''); }}
+                placeholder="https://company.yourdomain.com/api/v1"
+                placeholderTextColor={theme.colors.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                returnKeyType="done"
+                onSubmitEditing={handleSaveApiUrl}
+                style={{
+                  borderWidth: 1.5,
+                  borderColor: apiUrlError ? theme.colors.error : theme.colors.divider,
+                  borderRadius: theme.borderRadius.md,
+                  padding: theme.spacing.md,
+                  color: theme.colors.text,
+                  fontSize: 13,
+                  marginBottom: apiUrlError ? theme.spacing.xs : theme.spacing.md,
+                }}
+              />
+              {apiUrlError ? <Text style={[theme.typography.caption, { color: theme.colors.error, textAlign: 'center', marginBottom: theme.spacing.sm }]}>{apiUrlError}</Text> : null}
+              {newApiUrl.trim() ? (
+                <TouchableOpacity onPress={() => setNewApiUrl('')} style={{ alignItems: 'center', marginBottom: theme.spacing.md }}>
+                  <Text style={[theme.typography.caption, { color: theme.colors.error }]}>Clear — revert to shared server</Text>
+                </TouchableOpacity>
+              ) : null}
+              <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+                <TouchableOpacity onPress={() => { setShowApiUrlModal(false); setNewApiUrl(''); setApiUrlError(''); }} style={{ flex: 1, padding: theme.spacing.md, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.colors.divider, alignItems: 'center' }} activeOpacity={0.7}>
+                  <Text style={[theme.typography.label, { color: theme.colors.textSecondary }]}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleSaveApiUrl} disabled={apiUrlMutation.isPending} style={{ flex: 1, padding: theme.spacing.md, borderRadius: theme.borderRadius.md, backgroundColor: theme.colors.primary, alignItems: 'center' }} activeOpacity={0.8}>
+                  <Text style={[theme.typography.label, { color: '#fff' }]}>{apiUrlMutation.isPending ? 'Saving…' : t('common.save')}</Text>
                 </TouchableOpacity>
               </View>
             </View>

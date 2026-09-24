@@ -16,7 +16,7 @@ interface ConfigState {
   isDeviceApproved: boolean;
   isLoading: boolean;
   load: () => Promise<void>;
-  save: (code: string, apiUrl: string) => Promise<void>;
+  save: (code: string, apiUrl?: string) => Promise<void>;
   clear: () => Promise<void>;
   setDeviceStatus: (status: DeviceApprovalStatus) => Promise<void>;
 }
@@ -49,12 +49,14 @@ export const useConfigStore = create<ConfigState>((set) => ({
     }
   },
 
-  // Called after successful central config lookup — stores both slug and resolved apiUrl
-  save: async (code: string, apiUrl: string) => {
+  // Called after successful central config lookup — stores slug and optionally the resolved apiUrl.
+  // apiUrl is omitted when called from LoginScreen (slug-only save); omitting it preserves the
+  // previously stored URL so it is never overwritten with the literal string "undefined".
+  save: async (code: string, apiUrl?: string) => {
     const trimmed = code.trim().toLowerCase();
     await AsyncStorage.setItem(SLUG_KEY, trimmed);
-    await storage.setItemAsync(API_URL_KEY, apiUrl);
-    set({ branchCode: trimmed, apiUrl, isConfigured: true });
+    if (apiUrl) await storage.setItemAsync(API_URL_KEY, apiUrl);
+    set({ branchCode: trimmed, isConfigured: true, ...(apiUrl ? { apiUrl } : {}) });
   },
 
   clear: async () => {
