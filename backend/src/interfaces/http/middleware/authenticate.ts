@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import env from '../../../config/env';
-import { UnauthorizedError, AccountDisabledError } from '../../../domain/errors';
+import { UnauthorizedError, AccountDisabledError, CompanySuspendedError } from '../../../domain/errors';
 import UserModel from '../../../infrastructure/db/models/User.model';
 import TenantModel from '../../../infrastructure/db/models/Tenant.model';
 import BranchModel from '../../../infrastructure/db/models/Branch.model';
@@ -29,7 +29,7 @@ export default async function authenticate(req: any, res: any, next: any) {
     ]);
 
     if (!user || (user as any).status !== 'active') return next(new AccountDisabledError());
-    if (!tenant || (tenant as any).status !== 'active') return next(new AccountDisabledError());
+    if (!tenant || (tenant as any).status !== 'active') return next(new CompanySuspendedError());
     if (payload.branchId && (!branch || (branch as any).status !== 'active')) return next(new AccountDisabledError());
 
     req.user = {

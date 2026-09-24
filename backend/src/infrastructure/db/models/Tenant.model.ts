@@ -64,6 +64,7 @@ const tenantSchema = new mongoose.Schema({
   branding: { type: brandingSchema, default: () => ({}) },
   features: { type: featuresSchema, default: () => ({}) },
   settings: { type: settingsSchema, default: () => ({}) },
+  apiUrl: { type: String, default: null, trim: true },
   branchLimit: { type: Number, required: true, default: 99, min: 1 },
   staffLimit: { type: Number, required: true, default: 99, min: 1 },
   subscriptionExpiresAt: { type: Date, default: null },

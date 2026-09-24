@@ -46,6 +46,7 @@ export default class TenantController {
     this.updateExportFormats = this.updateExportFormats.bind(this);
     this.updateCreditCommissionFlag = this.updateCreditCommissionFlag.bind(this);
     this.updateDeviceApproval = this.updateDeviceApproval.bind(this);
+    this.updateApiUrl = this.updateApiUrl.bind(this);
     this.resetHoPassword = this.resetHoPassword.bind(this);
   }
 
@@ -204,6 +205,15 @@ export default class TenantController {
     const { enabled } = req.body;
     await this.tenantRepository.update(req.params.id, { 'features.deviceApprovalRequired': Boolean(enabled) });
     res.json({ success: true, data: { deviceApprovalRequired: Boolean(enabled) } });
+  }
+
+  async updateApiUrl(req: any, res: any) {
+    const tenant = await this.tenantRepository.findById(req.params.id);
+    if (!tenant) throw new NotFoundError('Tenant');
+    const { apiUrl } = req.body;
+    // Allow null to reset back to the shared/central backend
+    await this.tenantRepository.update(req.params.id, { apiUrl: apiUrl || null });
+    res.json({ success: true, data: { apiUrl: apiUrl || null } });
   }
 
   async updateExportFormats(req: any, res: any) {

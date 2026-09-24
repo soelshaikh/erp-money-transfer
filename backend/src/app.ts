@@ -17,6 +17,7 @@ import tenantRoutes from './interfaces/http/routes/tenant.routes';
 import dashboardRoutes from './interfaces/http/routes/dashboard.routes';
 import settingsRoutes from './interfaces/http/routes/settings.routes';
 import appInstallRoutes from './interfaces/http/routes/app-install.routes';
+import configRoutes from './interfaces/http/routes/config.routes';
 
 export default function createApp(container: any) {
   const app = express();
@@ -44,6 +45,7 @@ export default function createApp(container: any) {
   app.use('/api/v1/audit-logs', container.auditLogRoutes(container.auditLogController));
   app.use('/api/v1/device-sessions', container.deviceSessionRoutes(container.deviceSessionController));
   app.use('/api/v1/app-install', appInstallRoutes(container.appInstallController));
+  app.use('/api/v1/config', configRoutes(container.tenantRepository));
   app.use('/api/v1/commission-settlements', container.commissionSettlementRoutes(container.commissionSettlementController));
   app.use('/api/v1/hq-commission', container.hqCommissionRoutes(container.hqCommissionController));
   app.use('/api/v1/external-accounts', container.externalAccountRoutes(container.externalAccountController));

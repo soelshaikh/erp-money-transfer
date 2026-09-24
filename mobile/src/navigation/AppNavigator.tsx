@@ -55,7 +55,8 @@ export function AppNavigator() {
         try {
           const refreshToken = await storage.getItemAsync('refreshToken');
           if (!refreshToken) throw new Error('no refresh token');
-          const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+          const tenantApiUrl = await storage.getItemAsync('tenant_api_url');
+          const BASE_URL = tenantApiUrl || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
           const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
           await storage.setItemAsync('accessToken', data.data.accessToken);
           const { user, tenant } = await authApi.getMe();
