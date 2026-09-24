@@ -9,6 +9,7 @@ import Constants from 'expo-constants';
 import { useConfigStore } from '../../../store/configStore';
 import { useAuthStore } from '../../../store/authStore';
 import { apiClient } from '../../../api/client';
+import { fetchTenantConfig } from '../../../api/centralClient';
 import { getOrCreateDeviceId, getDeviceName } from '../../../utils/deviceId';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '—';
@@ -85,7 +86,7 @@ export function NotesScreen() {
     setLoading(false);
   };
 
-  // ── Slug mode: existing behaviour (validate company, save slug) ──────────
+  // ── Slug mode: look up company config from central backend, store apiUrl ──
   const handleSlugSave = async () => {
     if (loading) return;
     const trimmed = text.trim();
@@ -95,16 +96,28 @@ export function NotesScreen() {
     }
     setLoading(true);
     try {
-      const res = await apiClient.get('/auth/validate-company', { params: { slug: trimmed } });
-      const data = res.data?.data;
-      if (!data?.valid || data?.status !== 'active') {
-        setSaved(true);
+      const config = await fetchTenantConfig(trimmed);
+      if (config.status === 'suspended') {
+        Alert.alert('Company Suspended', 'This company account has been suspended. Please contact support.');
         setLoading(false);
         return;
       }
-    } catch (_e) {}
+      if (config.status === 'inactive') {
+        Alert.alert('Company Inactive', 'This company account is not active. Please contact support.');
+        setLoading(false);
+        return;
+      }
+      // Store both the slug and the resolved backend URL
+      await save(trimmed, config.apiUrl);
+    } catch (e: any) {
+      const code = e?.response?.data?.error?.code;
+      if (code === 'NOT_FOUND') {
+        Alert.alert('Not Found', 'No company found with that ID. Please check and try again.');
+      } else {
+        Alert.alert('Network Error', 'Could not reach the server. Please check your connection.');
+      }
+    }
     setLoading(false);
-    await save(trimmed);
     setSaved(true);
   };
 

@@ -1,6 +1,7 @@
 ERP Money Transfer - Setup Guide
 =================================
 
+Add the secret code (Given In Footer)
 
 SUPER ADMIN LOGIN
 -----------------

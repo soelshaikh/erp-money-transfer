@@ -92,3 +92,12 @@ export class DeviceNotAuthorizedError extends DomainError {
     this.statusCode = 401;
   }
 }
+
+export class CompanySuspendedError extends DomainError {
+  statusCode: number;
+
+  constructor() {
+    super('This company account has been suspended', 'COMPANY_SUSPENDED');
+    this.statusCode = 403;
+  }
+}

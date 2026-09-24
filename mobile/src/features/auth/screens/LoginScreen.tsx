@@ -5,7 +5,7 @@ import Constants from 'expo-constants';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../theme/TenantThemeProvider';
-import { useAuthStore } from '../../../store/authStore';
+import { useAuthStore, LogoutReason } from '../../../store/authStore';
 import { useConfigStore } from '../../../store/configStore';
 import { authApi } from '../api/authApi';
 import { AppButton } from '../../../shared/components/AppButton';
@@ -13,6 +13,15 @@ import { AppInput } from '../../../shared/components/AppInput';
 import { ErrorMessage } from '../../../shared/components/ErrorMessage';
 import { getOrCreateDeviceId, getDeviceName } from '../../../utils/deviceId';
 import { parseApiError } from '../../../utils/apiError';
+import { withAlpha } from '../../../utils/colors';
+
+const LOGOUT_REASON_MESSAGES: Record<NonNullable<LogoutReason>, string> = {
+  server_down:          'You were signed out — the server is under maintenance.',
+  network_unreachable:  'You were signed out — server could not be reached after multiple attempts.',
+  account_disabled:     'Your account has been disabled. Please contact support.',
+  company_suspended:    'Your company account has been suspended. Please contact support.',
+  session_expired:      'Your session has expired. Please sign in again.',
+};
 
 export function LoginScreen() {
   const { t } = useTranslation();
@@ -21,6 +30,8 @@ export function LoginScreen() {
   const setPendingDevice = useAuthStore((s: any) => s.setPendingDevice);
   const setPendingLoginParams = useAuthStore((s: any) => s.setPendingLoginParams);
   const clearPendingDevice = useAuthStore((s: any) => s.clearPendingDevice);
+  const logoutReason = useAuthStore((s: any) => s.logoutReason as LogoutReason);
+  const clearLogoutReason = useAuthStore((s: any) => s.clearLogoutReason);
   const { branchCode, clear: clearConfig, save: saveConfig } = useConfigStore();
 
   const [form, setForm] = useState<{ tenantSlug: string; username: string; password: string }>({
@@ -82,8 +93,8 @@ export function LoginScreen() {
 
   const handleLogin = () => {
     if (!validate()) return;
-    // Clear any leftover pending state from a previous login attempt
     clearPendingDevice();
+    clearLogoutReason();
     mutation.mutate();
   };
 
@@ -130,6 +141,25 @@ export function LoginScreen() {
             {t('auth.subtitle')}
           </Text>
         </TouchableOpacity>
+
+        {logoutReason && (
+          <TouchableOpacity
+            onPress={clearLogoutReason}
+            style={{
+              backgroundColor: withAlpha(theme.colors.error, 0.08),
+              borderWidth: 1,
+              borderColor: withAlpha(theme.colors.error, 0.35),
+              borderRadius: theme.borderRadius.md,
+              padding: theme.spacing.md,
+              marginBottom: theme.spacing.md,
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={{ color: theme.colors.error, fontSize: 13, textAlign: 'center', lineHeight: 18 }}>
+              {LOGOUT_REASON_MESSAGES[logoutReason]}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <ErrorMessage message={apiError} />
 

@@ -1,30 +1,37 @@
 import { useEffect, useRef } from 'react';
-import { Alert } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { storage } from '../../utils/storage';
 import { useAuthStore } from '../../store/authStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { queryClient } from '../../api/queryClient';
 
-const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://localhost:3000';
 const DEVICE_ID_KEY = 'app_device_id';
+
+// After this many failed reconnects (~17s with default backoff), treat the server as down.
+const RECONNECTION_ATTEMPTS = 5;
 
 export function useSocket(): void {
   const socketRef = useRef<Socket | null>(null);
-  const { user, tenant, isAuthenticated, logout } = useAuthStore();
+  const { user, tenant, isAuthenticated, forceLogout } = useAuthStore();
   const addNotification = useNotificationStore((s) => s.addNotification);
 
   useEffect(() => {
     if (!isAuthenticated || !user) return;
 
     const connect = async () => {
-      const [token, deviceId] = await Promise.all([
+      const [token, deviceId, tenantApiUrl] = await Promise.all([
         storage.getItemAsync('accessToken'),
         storage.getItemAsync(DEVICE_ID_KEY),
+        storage.getItemAsync('tenant_api_url'),
       ]);
 
-      socketRef.current = io(SOCKET_URL, {
+      // Use the company's dedicated backend URL, fall back to the central server
+      const baseUrl = tenantApiUrl || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+      const socketUrl = baseUrl.replace('/api/v1', '');
+
+      socketRef.current = io(socketUrl, {
         transports: ['websocket'],
+        reconnectionAttempts: RECONNECTION_ATTEMPTS,
         auth: {
           tenantId: tenant?._id,
           userId: user._id,
@@ -45,13 +52,14 @@ export function useSocket(): void {
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       });
 
+      // Fired by the server when an admin ends a session manually
       socketRef.current.on('force_logout', () => {
-        logout();
-        Alert.alert('Session Ended', 'Your session was ended by an administrator.');
+        forceLogout('account_disabled');
       });
 
-      socketRef.current.on('connect_error', (err: Error) => {
-        console.warn('[Socket] connect error', err.message);
+      // All reconnection attempts exhausted — server is unreachable or shut down
+      socketRef.current.on('reconnect_failed', () => {
+        forceLogout('server_down');
       });
     };
 
