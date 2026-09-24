@@ -25,9 +25,12 @@ export function useSocket(): void {
         storage.getItemAsync('tenant_api_url'),
       ]);
 
-      // Use the company's dedicated backend URL, fall back to the central server
-      const baseUrl = tenantApiUrl || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
-      const socketUrl = baseUrl.replace('/api/v1', '');
+      // Use the company's dedicated backend URL, fall back to the central server.
+      // Guard against a corrupted stored value (e.g. the literal string "undefined").
+      const resolvedApi = (tenantApiUrl && tenantApiUrl.startsWith('http'))
+        ? tenantApiUrl
+        : (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api/v1');
+      const socketUrl = resolvedApi.replace('/api/v1', '');
 
       socketRef.current = io(socketUrl, {
         transports: ['websocket'],

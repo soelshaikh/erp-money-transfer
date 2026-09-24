@@ -24,6 +24,8 @@ export const tenantApi = {
     apiClient.patch(`/tenants/${id}/credit-commission-flag`, { enabled }).then((r) => r.data),
   updateDeviceApproval: (id: string, enabled: boolean) =>
     apiClient.patch(`/tenants/${id}/device-approval`, { enabled }).then((r) => r.data),
+  updateApiUrl: (id: string, apiUrl: string | null) =>
+    apiClient.patch(`/tenants/${id}/api-url`, { apiUrl }).then((r) => r.data),
 
   // Super admin: browse company staff and manage devices cross-tenant
   getHoUser: (tenantId: string) =>
